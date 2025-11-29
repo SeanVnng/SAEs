@@ -74,23 +74,20 @@ Conception et déploiement d'une solution web (IP Address Management) permettant
 ```bash
 Mon-Portfolio-BUT-RT/
 │
-├── README.md          (Le fichier que je viens de te donner)
+├── README.md         
 │
-├── SAE15/             (Dossier du projet Cyber Ops)
-│   ├── README.md      (Le readme spécifique qu'on a fait avant)
+├── SAE15/             
+│   ├── README.md      
 │   ├── generate_site.py
 │   └── ...
 │
-├── SAE21/             (Dossier du projet Réseau)
-│   ├── README.md      (Le readme spécifique qu'on a fait avant)
+├── SAE21/             
+│   ├── README.md      
 │   ├── Réseau.pkt
 │   └── ...
 │
-├── SAE23/             (Dossier du projet Web IPAM)
-│   ├── README.md      (Le readme spécifique qu'on a fait avant)
+├── SAE23/             
+│   ├── README.md      
 │   ├── sae203.sql
 │   └── SITE/
-│
-└── IA_Detection/      (Ton projet IA)
-    ├── README.md
-    └── detec_ia.py
+
