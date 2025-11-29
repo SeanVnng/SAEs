@@ -12,10 +12,10 @@
 ## ✨ Fonctionnalités Principales
 
 * **📊 Analyse de Données Brutes :**
-    * [cite_start]**Parsing CSV :** Lecture optimisée du fichier source `cyber-operations-incidents.csv`.
+    * **Parsing CSV :** Lecture optimisée du fichier source `cyber-operations-incidents.csv`.
     * **Nettoyage :** Traitement des entrées, gestion des dates et catégorisation des types d'attaques.
 * **🌐 Génération de Rapport Web :**
-    * [cite_start]**Moteur de Template :** Création automatique du fichier `cyber_operations_site.html` sans framework lourd.
+    * **Moteur de Template :** Création automatique du fichier `cyber_operations_site.html` sans framework lourd.
     * **Design Intégré :** Le CSS est généré dynamiquement par le script Python pour un rendu immédiat.
 * **⚡ Performance & Légèreté :**
     * **Zéro Dépendance :** Utilisation exclusive des librairies standards Python (`csv`, `datetime`, etc.).
