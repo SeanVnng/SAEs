@@ -65,8 +65,8 @@ Conception et déploiement d'une solution web (IP Address Management) permettant
 
 **Sean VAN NGOC**
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/votre-profil)
-[![Email](https://img.shields.io/badge/Email-Contact%20Me-red?style=for-the-badge&logo=gmail)](mailto:votre.email@etudiant.univ-paris13.fr)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/seanvanngoc/)
+[![Email](https://img.shields.io/badge/Email-Contact%20Me-red?style=for-the-badge&logo=gmail)](mailto:seanvanngoc@gmail.com)
 
 ---
 *Dépôt mis à jour en 2025 - Université Sorbonne Paris Nord*
