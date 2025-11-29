@@ -32,7 +32,7 @@ Avant de commencer, assurez-vous d'avoir :
 
 * **Python 3.x** installé sur votre machine.
 * Un **Navigateur Web** moderne (Chrome, Firefox, Edge) pour visualiser le rapport.
-* [cite_start]Le fichier de données `cyber-operations-incidents.csv` présent dans le dossier.
+* Le fichier de données `cyber-operations-incidents.csv` présent dans le dossier.
 
 ---
 
