@@ -61,21 +61,9 @@ Conception et déploiement d'une solution web (IP Address Management) permettant
 
 ---
 
-### [4. 📷 Projet Personnel - Détection IA](./IA_Detection)
-**Vision par ordinateur ultra-légère.**
-
-Un projet bonus explorant l'intelligence artificielle sans infrastructure lourde. Utilisation d'un serveur Python minimaliste pour propulser une IA de détection d'objets (COCO-SSD) directement dans le navigateur.
-
-![TensorFlow](https://img.shields.io/badge/AI-TensorFlow.js-orange?style=flat-square&logo=tensorflow)
-![Python](https://img.shields.io/badge/Backend-Python-blue?style=flat-square&logo=python)
-
-* **Compétences :** Intégration IA, JavaScript, Python http.server.
-
----
-
 ## 👤 Auteur & Contact
 
-**Sean VAN NGOC** *Étudiant en BUT Réseaux & Télécommunications - IUT de Villetaneuse*
+**Sean VAN NGOC**
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/votre-profil)
 [![Email](https://img.shields.io/badge/Email-Contact%20Me-red?style=for-the-badge&logo=gmail)](mailto:votre.email@etudiant.univ-paris13.fr)
