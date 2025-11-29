@@ -1,31 +1,75 @@
-README — Projet SAE15
+# 🛡️ CYBER OPS ANALYZER - SAE 15 Project
 
-🇫🇷 Présentation
+![Python](https://img.shields.io/badge/Python-3.x-blue?style=for-the-badge&logo=python)
+![HTML5](https://img.shields.io/badge/Report-HTML5-orange?style=for-the-badge&logo=html5)
+![Data](https://img.shields.io/badge/Data-CSV-green?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Completed-success?style=for-the-badge)
 
-Ce projet génère une page HTML récapitulant des incidents de cybersécurité à partir d’un fichier CSV.
+**CYBER OPS ANALYZER** est un outil de traitement de données développé dans le cadre de la **SAE 15**. Il ne se contente pas de lire des données brutes : **il les transforme en intelligence visuelle**. Le script analyse un jeu de données complexe d'incidents de cybersécurité et génère automatiquement un rapport web interactif et lisible.
 
-Il se compose de :
--cyber-operations-incidents.csv : les données d’incidents
--generate_site.py : le script Python qui lit le CSV et produit la page HTML
--cyber_operations_site.html : la page HTML générée
+---
 
-Prérequis
-Python 3.x
-Bibliothèques Python standards (aucune installation supplémentaire requise si le script n’utilise que csv/html)
+## ✨ Fonctionnalités Principales
 
-Utilisation
-1. Placez generate_site.py et cyber-operations-incidents.csv dans le même dossier.
-2. Ouvrez un terminal dans ce dossier.
-3. Lancez :
+* **📊 Analyse de Données Brutes :**
+    * [cite_start]**Parsing CSV :** Lecture optimisée du fichier source `cyber-operations-incidents.csv`.
+    * **Nettoyage :** Traitement des entrées, gestion des dates et catégorisation des types d'attaques.
+* **🌐 Génération de Rapport Web :**
+    * [cite_start]**Moteur de Template :** Création automatique du fichier `cyber_operations_site.html` sans framework lourd.
+    * **Design Intégré :** Le CSS est généré dynamiquement par le script Python pour un rendu immédiat.
+* **⚡ Performance & Légèreté :**
+    * **Zéro Dépendance :** Utilisation exclusive des librairies standards Python (`csv`, `datetime`, etc.).
+    * **Portabilité :** Fonctionne sur n'importe quelle machine disposant de Python, sans installation complexe.
+* **📈 Visualisation :**
+    * Restitution des statistiques clés sur les cyber-opérations.
+    * Classement et filtrage des incidents majeurs.
+
+---
+
+## ⚙️ Prérequis
+
+Avant de commencer, assurez-vous d'avoir :
+
+* **Python 3.x** installé sur votre machine.
+* Un **Navigateur Web** moderne (Chrome, Firefox, Edge) pour visualiser le rapport.
+* [cite_start]Le fichier de données `cyber-operations-incidents.csv` présent dans le dossier.
+
+---
+
+## 🚀 Installation
+
+1.  **Télécharger le projet :**
+    Assurez-vous d'avoir les trois fichiers essentiels dans le même dossier :
+    * `generate_site.py`
+    * `cyber-operations-incidents.csv`
+    * `cyber_operations_site.html` (sera regénéré)
+
+2.  **Créer un environnement virtuel (Optionnel) :**
+    Comme le projet n'utilise pas de bibliothèques externes lourdes, cette étape est facultative mais recommandée pour la propreté.
+    ```bash
+    python -m venv venv
+    # Windows
+    venv\Scripts\activate
+    # Mac/Linux
+    source venv/bin/activate
+    ```
+
+3.  **Dépendances :**
+    Ce projet est conçu pour être **"Plug & Play"**. Aucune installation via `pip` n'est nécessaire si vous utilisez une installation Python standard. Les modules utilisés (`csv`, `os`, `datetime`) sont natifs.
+
+---
+
+## 🎮 Utilisation
+
+### Lancer la génération du rapport
+C'est la commande principale qui va lire les données et construire le site web.
+
+```bash
 python generate_site.py
-4. Le fichier cyber_operations_site.html sera créé ou mis à jour.
-5. Ouvrez ce fichier dans votre navigateur.
 
-Projet_SAE15/
+Projet SAE15/
+├── generate_site.py               # 🧠 Le Cerveau : Script de traitement et génération
+├── cyber-operations-incidents.csv # 💾 La Source : Données brutes de cybersécurité
+└── cyber_operations_site.html     # 🖥️ Le Rendu : Interface web finale générée
 
-  ├── cyber-operations-incidents.csv   # Données source
-
-  ├── generate_site.py                 # Script de génération
-
-  └── cyber_operations_site.html       # Sortie HTML
-
+Réalisé par Seann
