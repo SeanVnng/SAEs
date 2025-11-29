@@ -65,8 +65,6 @@ Avant de commencer, assurez-vous d'avoir :
 C'est la commande principale qui va lire les données et construire le site web.
 
 ```bash
-python generate_site.py
-
 Projet SAE15/
 ├── generate_site.py               # 🧠 Le Cerveau : Script de traitement et génération
 ├── cyber-operations-incidents.csv # 💾 La Source : Données brutes de cybersécurité
