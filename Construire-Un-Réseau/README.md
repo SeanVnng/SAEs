@@ -71,11 +71,11 @@ Le projet a été validé par une batterie de tests unitaires et d'intégration 
 
 Projet réalisé par l'équipe **SAE 21 - IUT Sorbonne Nord (2024-2025)** :
 
-* 🔴 **Chef de Projet :** 
-* 🟢 **Architecte Réseau :** 
-* 🔵 **Admin Systèmes :** 
-* 🟡 **Technicien Sécurité :** 
-* 🟣 **Testeur / Qualité :** 
+* 🔴 **Chef de Projet ** 
+* 🟢 **Architecte Réseau ** 
+* 🔵 **Admin Systèmes ** 
+* 🟡 **Technicien Sécurité ** 
+* 🟣 **Testeur / Qualité ** 
 
 ---
 *Basé sur le rapport technique `SAE21-Reseau-Informatique.pdf` inclus dans ce dépôt.*
