@@ -327,5 +327,66 @@ def mark_as_read(user, partner):
     conn.commit()
     conn.close()
 
+def remove_user_from_group(group_name, username):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 1. Récupérer l'ID du groupe et les membres
+    cursor.execute('SELECT id, members FROM groups WHERE name = ?', (group_name,))
+    grp = cursor.fetchone()
+    
+    if not grp:
+        conn.close()
+        return False
+
+    members = json.loads(grp['members'])
+    
+    # 2. Retirer l'utilisateur si présent
+    if username in members:
+        members.remove(username)
+        new_members_json = json.dumps(members)
+        cursor.execute('UPDATE groups SET members = ? WHERE id = ?', (new_members_json, grp['id']))
+        conn.commit()
+        conn.close()
+        return True
+    
+    conn.close()
+    return False
+
+def delete_conversation_history(username, target):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    user_id = get_user_id(username)
+    
+    # Vérifier si c'est un groupe (on ne supprime pas l'historique du groupe pour tout le monde, 
+    # mais pour simplifier ici, on ne fait rien côté BDD pour un groupe, c'est géré par le "Leave")
+    cursor.execute('SELECT id FROM groups WHERE name = ?', (target,))
+    grp = cursor.fetchone()
+    
+    if grp:
+        # On ne supprime pas les messages d'un groupe, on le quitte via l'autre fonction
+        conn.close()
+        return False
+        
+    target_id = get_user_id(target)
+    if not user_id or not target_id:
+        conn.close()
+        return False
+
+    # Supprime les messages entre ces deux personnes
+    cursor.execute('''
+        DELETE FROM messages 
+        WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+    ''', (user_id, target_id, target_id, user_id))
+    
+    # Supprime aussi l'amitié ? (Optionnel, ici on garde l'ami mais on vide le chat)
+    # Si tu veux supprimer l'ami : 
+    # cursor.execute('DELETE FROM friends WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)', (user_id, target_id, target_id, user_id))
+    
+    conn.commit()
+    conn.close()
+    return True
+
 if __name__ == "__main__":
     create_tables()
