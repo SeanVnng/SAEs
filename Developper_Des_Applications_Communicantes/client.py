@@ -11,8 +11,6 @@ import random
 import cv2
 import pyaudio
 import numpy as np
-# Note : On n'utilise plus 'audioop' car il est supprimé dans Python 3.13. 
-# On utilise numpy pour le calcul du volume (plus robuste).
 
 # Kivy
 from kivy.lang import Builder
@@ -47,9 +45,6 @@ SERVER_IP = "127.0.0.1"
 SERVER_PORT = 5000
 UDP_PORT = 9999
 
-# =================================================================
-# GESTIONNAIRE D'APPELS (OPTIMISÉ VOIP)
-# =================================================================
 class CallManager:
     def __init__(self, app, server_ip, udp_port):
         self.app = app
@@ -61,22 +56,11 @@ class CallManager:
         self.cam_active = True
         self.mic_active = True
         self.is_video_call = False 
-        
-        # --- CONFIGURATION AUDIO ---
         self.chunk = 1024
         self.format = pyaudio.paInt16
         self.channels = 1
-        
-        # 16000 Hz est la fréquence standard pour la VoIP (Wideband).
-        # Contrairement à 44100 Hz (CD), cela réduit la taille des données par 3.
-        # Résultat : Moins de lags, moins de paquets perdus en 4G, son plus stable.
         self.rate = 16000 
-        
         self.p = pyaudio.PyAudio()
-        
-        # Seuil de silence (Noise Gate).
-        # Si le volume calculé est inférieur à 300, on considère que c'est du bruit de fond
-        # et on n'envoie rien. Cela coupe le "pshhh" permanent quand personne ne parle.
         self.silence_threshold = 300 
         
     def register_udp(self, username):
@@ -113,7 +97,6 @@ class CallManager:
 
     def send_video_loop(self):
         self.cap = cv2.VideoCapture(0)
-        # On réduit la résolution à 320x240 pour alléger le réseau et privilégier la fluidité.
         self.cap.set(3, 320)
         self.cap.set(4, 240)
         while self.in_call:
@@ -121,15 +104,13 @@ class CallManager:
                 ret, frame = self.cap.read()
                 if ret:
                     Clock.schedule_once(lambda dt: self.app.update_local_video(frame))
-                    # Compression JPEG un peu plus forte (40) pour réduire la latence UDP
                     _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 40])
                     data_bytes = buffer.tobytes()
                     prefix = f"{self.target_user}|||V:".encode('utf-8')
-                    # UDP a une limite de taille par paquet (~65k bytes). On vérifie avant d'envoyer.
                     if len(data_bytes) < 60000:
                         try: self.udp_sock.sendto(prefix + data_bytes, (self.server_ip, self.udp_port))
                         except: pass
-            time.sleep(0.05) # ~20 FPS max
+            time.sleep(0.05)
 
     def send_audio_loop(self):
         try:
@@ -137,39 +118,22 @@ class CallManager:
             while self.in_call:
                 if self.mic_active:
                     try:
-                        # Lecture du micro
                         data = stream.read(self.chunk, exception_on_overflow=False)
-                        
-                        # --- NOISE GATE (VERSION NUMPY) ---
-                        # On convertit les octets bruts en tableau de nombres (int16) pour analyser le son.
                         np_data = np.frombuffer(data, dtype=np.int16)
-                        
-                        # Calcul du volume RMS (Root Mean Square = Puissance moyenne du son)
-                        if len(np_data) > 0:
-                            rms = np.sqrt(np.mean(np_data**2))
-                        else:
-                            rms = 0
-                        
-                        # Si le volume dépasse le seuil (300), c'est une voix : on envoie.
-                        # Sinon, c'est du silence/bruit de fond : on n'envoie rien (économie de bande passante).
+                        if len(np_data) > 0: rms = np.sqrt(np.mean(np_data**2))
+                        else: rms = 0
                         if rms > self.silence_threshold:
                             prefix = f"{self.target_user}|||A:".encode('utf-8')
                             self.udp_sock.sendto(prefix + data, (self.server_ip, self.udp_port))
-                            
-                    except Exception as e:
-                        print(f"Erreur mic: {e}")
-                else:
-                    time.sleep(0.01)
-        except Exception as e:
-            print(f"Erreur init micro: {e}")
+                    except Exception as e: print(f"Erreur mic: {e}")
+                else: time.sleep(0.01)
+        except Exception as e: print(f"Erreur init micro: {e}")
 
     def receive_udp_loop(self):
         while True:
             try:
-                # Buffer de réception large pour éviter de couper les paquets vidéo
                 data, _ = self.udp_sock.recvfrom(60000)
                 if not self.in_call: continue 
-                
                 if data.startswith(b"V:"):
                     nparr = np.frombuffer(data[2:], np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -177,15 +141,9 @@ class CallManager:
                 elif data.startswith(b"A:"):
                     if not hasattr(self, 'audio_out'):
                         self.audio_out = self.p.open(format=self.format, channels=self.channels, rate=self.rate, output=True)
-                    try:
-                        self.audio_out.write(data[2:])
-                    except OSError:
-                        pass # Ignore les petites erreurs de buffer (Underflow)
+                    try: self.audio_out.write(data[2:])
+                    except OSError: pass
             except: pass
-
-# =================================================================
-# CLASSES UI
-# =================================================================
 
 class CircularAvatar(ButtonBehavior, MDBoxLayout):
     source = StringProperty()
@@ -194,7 +152,7 @@ class ChatBubble(MDBoxLayout):
     sender = StringProperty()
     message = StringProperty()
     is_me = BooleanProperty(False)
-    msg_type = StringProperty("text") # text, image, file, call_log
+    msg_type = StringProperty("text")
     file_path = StringProperty("")
 
 class UserListItem(TwoLineAvatarListItem):
@@ -204,6 +162,7 @@ class UserListItem(TwoLineAvatarListItem):
 
 class NewChatContent(MDBoxLayout): pass
 class GroupCreateContent(MDBoxLayout): pass
+class AddFriendContent(MDBoxLayout): pass # Nouveau
 
 class GlowWidget(Widget):
     glow_color = ListProperty([1, 0, 0, 0.5])
@@ -218,9 +177,6 @@ class AudioCallScreen(MDScreen):
     avatar_source = StringProperty("assets/default_avatar.png")
     status_text = StringProperty("Appel en cours...")
 
-# =================================================================
-# DESIGN SYSTEM (KV)
-# =================================================================
 KV = '''
 #:import get_color_from_hex kivy.utils.get_color_from_hex
 
@@ -245,37 +201,31 @@ KV = '''
     hint_text_color_normal: get_color_from_hex("#A8A8A8")
     radius: [10,]
 
-# --- NOUVELLE DISCUSSION (PAR NUMERO) ---
-<NewChatContent>:
+<AddFriendContent>:
     orientation: "vertical"
     spacing: "12dp"
     size_hint_y: None
     height: "120dp"
-    
     InstaTextField:
         id: phone_input
-        hint_text: "Entrez le numéro de téléphone"
+        hint_text: "Numéro de téléphone"
         input_filter: "int"
-        icon_right: "phone"
+        icon_right: "phone-plus"
 
-# --- CREATION GROUPE ---
 <GroupCreateContent>:
     orientation: "vertical"
     spacing: "12dp"
     size_hint_y: None
     height: "200dp"
-    
     InstaTextField:
         id: group_name
         hint_text: "Nom du groupe"
-    
     InstaTextField:
         id: group_members
-        hint_text: "Membres (pseudos séparés par virgule)"
-        helper_text: "Ex: roro, sean, admin (Max 50)"
+        hint_text: "Membres (pseudos)"
+        helper_text: "Entrez les prénoms séparés par virgule"
         helper_text_mode: "persistent"
 
-# --- BULLE DE CHAT AVANCEE ---
 <ChatBubble>:
     size_hint_y: None
     height: self.minimum_height
@@ -287,8 +237,6 @@ KV = '''
     radius: [dp(22), dp(22), dp(4), dp(22)] if root.is_me else [dp(22), dp(22), dp(22), dp(4)]
     md_bg_color: get_color_from_hex("#2E2745") if root.is_me else get_color_from_hex("#262626")
     pos_hint: {'right': 1} if root.is_me else {'left': 1}
-    
-    # Affichage Texte & Call Logs
     MDLabel:
         id: msg_label
         text: root.message
@@ -303,8 +251,6 @@ KV = '''
         text_size: dp(280), None 
         valign: 'middle'
         halign: 'left'
-
-    # Affichage Image (si msg_type == image)
     AsyncImage:
         source: root.file_path if root.msg_type == 'image' else ""
         size_hint_y: None
@@ -313,7 +259,6 @@ KV = '''
         keep_ratio: True
         opacity: 1 if root.msg_type == 'image' else 0
 
-# --- ITEM LISTE CONVERSATION ---
 <UserListItem>:
     text: root.username
     secondary_text: root.last_msg
@@ -326,15 +271,28 @@ KV = '''
     ImageLeftWidget:
         source: "assets/default_avatar.png"
         radius: [25, 25, 25, 25]
+    
     MDLabel:
-        text: "●" if root.unread_count > 0 else ""
+        text: str(root.unread_count) if root.unread_count > 0 else ""
         theme_text_color: "Custom"
-        text_color: get_color_from_hex("#9D84FD") 
-        font_size: "10sp"
-        halign: "right"
+        text_color: 1, 1, 1, 1
+        md_bg_color: get_color_from_hex("#FF4444") if root.unread_count > 0 else (0,0,0,0)
+        radius: [dp(10),]
+        font_size: "11sp"
+        bold: True
+        halign: "center"
+        valign: "center"
+        size_hint: None, None
+        size: dp(22), dp(22)
         pos_hint: {"center_y": .5, "right": 0.95}
+        canvas.before:
+            Color:
+                rgba: self.md_bg_color
+            RoundedRectangle:
+                pos: self.pos
+                size: self.size
+                radius: [dp(11),]
 
-# --- LOGIN & REGISTER (CORRIGÉ) ---
 <LoginScreen>:
     md_bg_color: get_color_from_hex("#333232")
     MDBoxLayout:
@@ -446,13 +404,10 @@ KV = '''
             pos_hint: {"center_x": 0.5}
             on_release: app.go_to_login()
 
-# --- MAIN SCREEN (SIDEBAR + CHAT) ---
 <MainScreen>:
     MDBoxLayout:
         orientation: "horizontal"
         md_bg_color: get_color_from_hex("#333232")
-        
-        # SIDEBAR
         MDBoxLayout:
             orientation: "vertical"
             size_hint_x: 0.3
@@ -477,7 +432,6 @@ KV = '''
                     theme_text_color: "Custom"
                     text_color: 1, 1, 1, 1
                     valign: "center"
-                # MENU : Nouveau chat ou Groupe
                 MDIconButton:
                     icon: "plus-box-multiple-outline"
                     theme_text_color: "Custom"
@@ -521,8 +475,6 @@ KV = '''
                 bar_width: 0
                 MDList:
                     id: conversations_list
-
-        # CHAT ZONE
         MDBoxLayout:
             orientation: "vertical"
             size_hint_x: 0.7
@@ -562,13 +514,11 @@ KV = '''
                     theme_text_color: "Custom"
                     text_color: 1, 1, 1, 1
                     on_release: app.try_call("video")
-                # INFO BUTTON
                 MDIconButton:
                     icon: "information-outline"
                     theme_text_color: "Custom"
                     text_color: 1, 1, 1, 1
                     on_release: app.get_target_info()
-
             MDScrollView:
                 id: chat_scroll
                 MDBoxLayout:
@@ -578,8 +528,6 @@ KV = '''
                     height: self.minimum_height
                     padding: [dp(20), dp(20)]
                     spacing: dp(8)
-
-            # ZONE SAISIE
             MDBoxLayout:
                 size_hint_y: None
                 height: dp(80)
@@ -594,7 +542,6 @@ KV = '''
                     padding: [dp(15), 0]
                     MDBoxLayout:
                         orientation: "horizontal"
-                        # BOUTON FICHIER / PAPERCLIP
                         MDIconButton:
                             icon: "paperclip"
                             theme_text_color: "Custom"
@@ -877,7 +824,7 @@ class WhatsAppClientApp(MDApp):
             select_path=self.select_path,
             preview=True,
         )
-        self.file_mode = "profile" # ou "send"
+        self.file_mode = "profile"
 
         Builder.load_string(KV)
         self.sm = MDScreenManager()
@@ -938,7 +885,6 @@ class WhatsAppClientApp(MDApp):
         self.call_manager.stop_call()
         if tgt:
             self.send_json({"type": "END_CALL", "target": tgt})
-            # LOG DU CALL
             self.send_message_log(tgt, "📞 Appel terminé", "call_log")
             
         toast("Appel terminé")
@@ -986,33 +932,74 @@ class WhatsAppClientApp(MDApp):
     # ==========================================
     def open_menu_dialog(self):
         self.dialog = MDDialog(
-            title="Nouveau",
+            title="Menu",
             type="simple",
             items=[
-                OneLineAvatarIconListItem(text="Nouvelle discussion (Numéro)", on_release=lambda x: self.open_phone_search()),
+                OneLineAvatarIconListItem(text="Ajouter un ami", on_release=lambda x: self.open_add_friend_dialog()),
+                OneLineAvatarIconListItem(text="Nouvelle discussion", on_release=lambda x: self.start_new_chat_flow()),
                 OneLineAvatarIconListItem(text="Créer un groupe", on_release=lambda x: self.open_group_create())
             ],
         )
         self.dialog.open()
 
-    def open_phone_search(self):
+    # --- AJOUTER AMI ---
+    def open_add_friend_dialog(self):
         if self.dialog: self.dialog.dismiss()
-        content = NewChatContent()
+        content = AddFriendContent()
         self.dialog = MDDialog(
-            title="Chercher par numéro",
+            title="Ajouter un ami",
             type="custom",
             content_cls=content,
             buttons=[
                 MDFlatButton(text="ANNULER", on_release=lambda x: self.dialog.dismiss()),
-                MDFillRoundFlatButton(text="CHERCHER", on_release=lambda x: self.search_phone(content.ids.phone_input.text))
+                MDFillRoundFlatButton(text="AJOUTER", on_release=lambda x: self.add_friend_action(content.ids.phone_input.text))
             ]
         )
         self.dialog.open()
 
-    def search_phone(self, phone):
+    def add_friend_action(self, phone):
         if not phone: return
-        self.send_json({"type": "FIND_BY_PHONE", "phone": phone})
+        self.send_json({"type": "ADD_FRIEND", "phone": phone})
         if self.dialog: self.dialog.dismiss()
+
+    # --- NOUVELLE DISCU ---
+    def start_new_chat_flow(self):
+        if self.dialog: self.dialog.dismiss()
+        self.send_json({"type": "GET_FRIENDS"}) # Demande QUE les amis
+
+    def show_users_dialog(self, users_list):
+        if not users_list:
+            toast("Aucun ami trouvé. Ajoutez-en d'abord !")
+            return
+
+        items = []
+        for user in users_list:
+            items.append(
+                OneLineAvatarIconListItem(
+                    text=user,
+                    on_release=lambda x, u=user: self.select_user_for_chat(u)
+                )
+            )
+
+        self.dialog = MDDialog(
+            title="Mes Amis",
+            type="simple",
+            items=items,
+            buttons=[MDFlatButton(text="FERMER", on_release=lambda x: self.dialog.dismiss())]
+        )
+        self.dialog.open()
+
+    def select_user_for_chat(self, user):
+        if self.dialog: self.dialog.dismiss()
+        found = False
+        for c in self.conversations_data:
+            if c['username'] == user: found = True
+        
+        if not found:
+            self.conversations_data.insert(0, {'username': user, 'last_msg': 'Nouvelle discussion', 'unread_count': 0, 'timestamp': ''})
+            
+        self.load_conversation(user)
+        self.refresh_sidebar()
 
     def open_group_create(self):
         if self.dialog: self.dialog.dismiss()
@@ -1032,12 +1019,10 @@ class WhatsAppClientApp(MDApp):
         name = content.ids.group_name.text
         members_str = content.ids.group_members.text
         if not name or not members_str: return
-        
         members = [m.strip() for m in members_str.split(',') if m.strip()]
         if len(members) > 50:
             toast("Erreur: Max 50 membres")
             return
-            
         self.send_json({"type": "CREATE_GROUP", "name": name, "members": members})
         if self.dialog: self.dialog.dismiss()
 
@@ -1046,9 +1031,7 @@ class WhatsAppClientApp(MDApp):
             self.send_json({"type": "GET_TARGET_INFO", "target": self.current_target})
 
     def show_target_info_dialog(self, data):
-        # Data contient username, infos, phone, profile_pic_path
         info_text = f"Bio: {data.get('infos', '')}\nTél: {data.get('phone_number', '')}"
-        # On pourrait afficher l'image aussi, mais MDDialog texte est simple
         self.dialog = MDDialog(
             title=f"Infos de {data.get('username')}",
             text=info_text,
@@ -1100,15 +1083,23 @@ class WhatsAppClientApp(MDApp):
                 self.sm.get_screen('login').ids.error_label.text = "Identifiants invalides"
 
         elif t == "REGISTER_REPLY":
-                    if resp.get("success"):
-                        # --- TON MESSAGE ICI ---
-                        self.show_alert_dialog("Félicitations", "Vous vous êtes bien inscrit !") 
-                        self.go_to_login()
-                    else:
-                        # Si le pseudo est déjà pris
-                        screen = self.sm.get_screen('register')
-                        screen.ids.reg_error_label.text = "Ce pseudo est déjà utilisé"
-                        toast("Pseudo indisponible")
+            if resp.get("success"):
+                self.show_alert_dialog("Félicitations", "Vous vous êtes bien inscrit !")
+                self.go_to_login()
+            else:
+                toast("Ce pseudo est déjà pris")
+                screen = self.sm.get_screen('register')
+                screen.ids.reg_error_label.text = "Pseudo indisponible"
+
+        elif t == "ADD_FRIEND_REPLY":
+            if resp.get("success"):
+                friend_name = resp.get("message")
+                self.show_alert_dialog("Succès", f"{friend_name} a été ajouté à vos amis !")
+            else:
+                toast(f"Erreur: {resp.get('message')}")
+
+        elif t == "FRIENDS_LIST":
+            self.show_users_dialog(resp.get("data", []))
 
         elif t == "PROFILE_DATA":
             data = resp.get("data", {})
@@ -1131,17 +1122,25 @@ class WhatsAppClientApp(MDApp):
             m_type = resp.get("msg_type", "text")
             f_path = resp.get("file_path")
             
-            # Si c'est un fichier image, on construit le chemin complet
             full_path = ""
             if f_path:
-                full_path = os.path.abspath(os.path.join("server_files", f_path)) # On suppose accès local pour l'instant
+                full_path = os.path.abspath(os.path.join("server_files", f_path))
 
             if sender == self.current_target or (resp.get("is_group") and resp.get("group_name") == self.current_target):
                 self.add_message_bubble(sender, content, False, m_type, full_path)
             else:
                 target = resp.get("group_name") if resp.get("is_group") else sender
-                if target not in self.conversations_data: self.conversations_data.insert(0, target)
-                self.unread_counts[target] = self.unread_counts.get(target, 0) + 1
+                found = False
+                for c in self.conversations_data:
+                    if c['username'] == target:
+                        c['last_msg'] = content if m_type == 'text' else m_type
+                        c['unread_count'] += 1
+                        found = True
+                        break
+                
+                if not found:
+                    self.conversations_data.insert(0, {'username': target, 'last_msg': content, 'unread_count': 1, 'timestamp': ''})
+                
                 self.refresh_sidebar()
                 toast(f"Message de {sender}")
 
@@ -1150,27 +1149,17 @@ class WhatsAppClientApp(MDApp):
                 chat_box = self.sm.get_screen('chat_interface').ids.chat_box
                 chat_box.clear_widgets()
                 for msg in resp.get("data", []):
-                    # msg est un dict {sender, content, type, file_path, timestamp}
                     full_path = ""
                     if msg.get("file_path"):
                         full_path = os.path.abspath(os.path.join("server_files", msg.get("file_path")))
                     self.add_message_bubble(msg["sender"], msg["content"], msg["sender"] == self.username, msg.get("type", "text"), full_path)
-
-        elif t == "FIND_PHONE_REPLY":
-            user = resp.get("username")
-            if user:
-                if user not in self.conversations_data: self.conversations_data.insert(0, user)
-                self.load_conversation(user)
-                self.refresh_sidebar()
-            else:
-                toast("Aucun utilisateur trouvé")
 
         elif t == "TARGET_INFO_REPLY":
             self.show_target_info_dialog(resp.get("data"))
 
         elif t == "GROUP_CREATED":
             grp = resp.get("name")
-            if grp not in self.conversations_data: self.conversations_data.insert(0, grp)
+            self.conversations_data.insert(0, {'username': grp, 'last_msg': 'Groupe créé', 'unread_count': 0, 'timestamp': ''})
             self.load_conversation(grp)
             self.refresh_sidebar()
 
@@ -1205,14 +1194,16 @@ class WhatsAppClientApp(MDApp):
             except: break
         self.is_connected = False
 
-    # --- UI HELPERS ---
+    # --- UI HELPERS MODIFIÉS POUR DICT ---
     def refresh_sidebar(self, filter_text=""):
         conversations_list = self.sm.get_screen('chat_interface').ids.conversations_list
         conversations_list.clear_widgets()
-        for user in self.conversations_data:
+        for item_data in self.conversations_data:
+            user = item_data['username']
+            l_msg = item_data['last_msg']
+            count = item_data['unread_count']
             if filter_text.lower() in user.lower():
-                count = self.unread_counts.get(user, 0)
-                item = UserListItem(username=user, unread_count=count)
+                item = UserListItem(username=user, last_msg=str(l_msg), unread_count=count)
                 conversations_list.add_widget(item)
 
     def filter_conversations(self, text):
@@ -1223,8 +1214,10 @@ class WhatsAppClientApp(MDApp):
         screen = self.sm.get_screen('chat_interface')
         screen.ids.chat_title_label.text = target_user
         screen.ids.chat_box.clear_widgets()
-        self.unread_counts[target_user] = 0
-        self.refresh_sidebar() 
+        for c in self.conversations_data:
+            if c['username'] == target_user:
+                c['unread_count'] = 0
+        self.refresh_sidebar()
         self.send_json({"type": "HISTORY", "target": target_user})
 
     def send_message(self):
@@ -1235,9 +1228,16 @@ class WhatsAppClientApp(MDApp):
             self.add_message_bubble(self.username, msg, True, "text")
             self.send_json({"type": "MESSAGE", "receiver": self.current_target, "content": msg, "msg_type": "text"})
             txt_field.text = ""
-            if self.current_target in self.conversations_data:
-                self.conversations_data.remove(self.current_target)
-            self.conversations_data.insert(0, self.current_target)
+            found = False
+            for c in self.conversations_data:
+                if c['username'] == self.current_target:
+                    c['last_msg'] = msg
+                    found = True
+                    self.conversations_data.remove(c)
+                    self.conversations_data.insert(0, c)
+                    break
+            if not found:
+                 self.conversations_data.insert(0, {'username': self.current_target, 'last_msg': msg, 'unread_count': 0, 'timestamp': ''})
             self.refresh_sidebar()
 
     def send_message_log(self, target, content, m_type):
@@ -1260,26 +1260,17 @@ class WhatsAppClientApp(MDApp):
     
     def register_action(self):
         screen = self.sm.get_screen('register')
-        username = screen.ids.reg_user.text
-        password = screen.ids.reg_password.text
-
-        # 1. On vérifie si les champs sont vides
-        if not username or not password:
+        user_text = screen.ids.reg_user.text.strip()
+        pass_text = screen.ids.reg_password.text.strip()
+        if not user_text or not pass_text:
             screen.ids.reg_error_label.text = "Veuillez remplir tous les champs !"
-            toast("Champs manquants") # Petit message temporaire
+            toast("Champs vides")
             return
-
-        # 2. On essaie de se connecter au serveur
         if self.connect_socket():
-            # Si connecté, on envoie la demande
-            self.send_json({
-                "type": "REGISTER", 
-                "username": username, 
-                "password": password
-            })
+            self.send_json({"type": "REGISTER", "username": user_text, "password": pass_text})
         else:
-            # Si le serveur est éteint
-            screen.ids.reg_error_label.text = "Serveur inaccessible (Vérifiez IP)"
+            screen.ids.reg_error_label.text = "Serveur inaccessible"
+            toast("Erreur serveur")
     
     def login(self, user, pwd):
         if not user: return
@@ -1330,8 +1321,11 @@ class WhatsAppClientApp(MDApp):
                 "file_data": data,
                 "file_ext": ext
             })
-            # Ajouter bulle locale (on utilise le path local pour l'affichage immédiat)
             self.add_message_bubble(self.username, os.path.basename(path), True, msg_type, path)
+            for c in self.conversations_data:
+                if c['username'] == self.current_target:
+                    c['last_msg'] = f"Fichier: {os.path.basename(path)}"
+            self.refresh_sidebar()
             
         except Exception as e:
             toast(f"Erreur envoi fichier: {e}")
