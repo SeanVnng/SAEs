@@ -9,7 +9,7 @@ SERVER_IP = "0.0.0.0"
 SERVER_PORT = 5000
 UDP_PORT = 9999
 IMAGE_FOLDER = "server_images"
-FILE_FOLDER = "server_files" # Nouveau dossier pour les PDFs, etc.
+FILE_FOLDER = "server_files"
 
 for folder in [IMAGE_FOLDER, FILE_FOLDER]:
     if not os.path.exists(folder):
@@ -66,7 +66,7 @@ def handle_client(client_socket, addr):
 
     while True:
         try:
-            data = client_socket.recv(1024 * 1024 * 5) # Augmenter buffer pour les images
+            data = client_socket.recv(1024 * 1024 * 5)
             if not data: break
             
             try:
@@ -81,13 +81,17 @@ def handle_client(client_socket, addr):
                         clients[current_username] = client_socket
                         send_to_user(current_username, {"type": "LOGIN_REPLY", "success": True})
                     else:
-                         send_to_user(current_username, {"type": "LOGIN_REPLY", "success": False})
+                         # Pour le login, on peut utiliser current_username si défini, sinon send direct
+                         client_socket.send(json.dumps({"type": "LOGIN_REPLY", "success": False}).encode('utf-8'))
 
                 elif msg_type == "REGISTER":
                     user = msg.get("username")
                     pwd = msg.get("password")
                     success = db.create_user(user, pwd)
-                    send_to_user(current_username, {"type": "REGISTER_REPLY", "success": success})
+                    # CORRECTION ICI : On répond directement au socket (car pas encore de current_username)
+                    try:
+                        client_socket.send(json.dumps({"type": "REGISTER_REPLY", "success": success}).encode('utf-8'))
+                    except: pass
 
                 elif not current_username: continue
 
@@ -108,7 +112,7 @@ def handle_client(client_socket, addr):
                     if len(members) > 50:
                         send_to_user(current_username, {"type": "ERROR", "msg": "Trop de membres"})
                     else:
-                        members.append(current_username) # Admin is member
+                        members.append(current_username)
                         db.create_group(grp_name, current_username, members)
                         send_to_user(current_username, {"type": "GROUP_CREATED", "name": grp_name})
 
@@ -121,7 +125,6 @@ def handle_client(client_socket, addr):
                     
                     file_path = None
                     if m_type in ["image", "file"] and file_data:
-                        # Sauvegarder le fichier
                         filename = f"{datetime.now().timestamp()}_{current_username}.{file_ext}"
                         save_path = os.path.join(FILE_FOLDER, filename)
                         try:
@@ -130,12 +133,10 @@ def handle_client(client_socket, addr):
                             file_path = filename
                         except: pass
 
-                    # Sauvegarde DB
                     is_group = False
-                    if db.get_group_members(receiver): # C'est un groupe
+                    if db.get_group_members(receiver): 
                         is_group = True
                         db.save_message(current_username, None, content, m_type, file_path, group_name=receiver)
-                        # Broadcast
                         broadcast_data = {
                             "type": "NEW_MESSAGE", 
                             "sender": current_username, 
@@ -147,7 +148,6 @@ def handle_client(client_socket, addr):
                         }
                         broadcast_to_group(receiver, current_username, broadcast_data)
                     else:
-                        # Privé
                         db.save_message(current_username, receiver, content, m_type, file_path)
                         if receiver in clients:
                             send_to_user(receiver, {
