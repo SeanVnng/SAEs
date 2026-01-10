@@ -1100,11 +1100,15 @@ class WhatsAppClientApp(MDApp):
                 self.sm.get_screen('login').ids.error_label.text = "Identifiants invalides"
 
         elif t == "REGISTER_REPLY":
-            if resp.get("success"):
-                self.show_alert_dialog("Succès", "Compte créé ! Connectez-vous.")
-                self.go_to_login()
-            else:
-                toast("Pseudo pris")
+                    if resp.get("success"):
+                        # --- TON MESSAGE ICI ---
+                        self.show_alert_dialog("Félicitations", "Vous vous êtes bien inscrit !") 
+                        self.go_to_login()
+                    else:
+                        # Si le pseudo est déjà pris
+                        screen = self.sm.get_screen('register')
+                        screen.ids.reg_error_label.text = "Ce pseudo est déjà utilisé"
+                        toast("Pseudo indisponible")
 
         elif t == "PROFILE_DATA":
             data = resp.get("data", {})
@@ -1256,8 +1260,26 @@ class WhatsAppClientApp(MDApp):
     
     def register_action(self):
         screen = self.sm.get_screen('register')
-        if not screen.ids.reg_user.text or not screen.ids.reg_password.text: return
-        if self.connect_socket(): self.send_json({"type": "REGISTER", "username": screen.ids.reg_user.text, "password": screen.ids.reg_password.text})
+        username = screen.ids.reg_user.text
+        password = screen.ids.reg_password.text
+
+        # 1. On vérifie si les champs sont vides
+        if not username or not password:
+            screen.ids.reg_error_label.text = "Veuillez remplir tous les champs !"
+            toast("Champs manquants") # Petit message temporaire
+            return
+
+        # 2. On essaie de se connecter au serveur
+        if self.connect_socket():
+            # Si connecté, on envoie la demande
+            self.send_json({
+                "type": "REGISTER", 
+                "username": username, 
+                "password": password
+            })
+        else:
+            # Si le serveur est éteint
+            screen.ids.reg_error_label.text = "Serveur inaccessible (Vérifiez IP)"
     
     def login(self, user, pwd):
         if not user: return
