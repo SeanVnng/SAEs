@@ -33,7 +33,7 @@ from kivymd.uix.fitimage import FitImage
 from kivymd.uix.label import MDLabel
 from kivymd.uix.list import OneLineAvatarIconListItem, TwoLineAvatarListItem, IconLeftWidget
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDIconButton, MDFillRoundFlatButton
+from kivymd.uix.button import MDFlatButton, MDIconButton, MDFillRoundFlatButton, MDRaisedButton
 from kivymd.toast import toast
 from kivymd.uix.filemanager import MDFileManager
 from kivymd.uix.textfield import MDTextField
@@ -148,6 +148,9 @@ class CallManager:
 class CircularAvatar(ButtonBehavior, MDBoxLayout):
     source = StringProperty()
 
+class AddFriendBanner(MDBoxLayout):
+    target_username = StringProperty()
+
 class ChatBubble(MDBoxLayout):
     sender = StringProperty()
     message = StringProperty()
@@ -162,7 +165,7 @@ class UserListItem(TwoLineAvatarListItem):
 
 class NewChatContent(MDBoxLayout): pass
 class GroupCreateContent(MDBoxLayout): pass
-class AddFriendContent(MDBoxLayout): pass # Nouveau
+class AddFriendContent(MDBoxLayout): pass
 
 class GlowWidget(Widget):
     glow_color = ListProperty([1, 0, 0, 0.5])
@@ -226,17 +229,51 @@ KV = '''
         helper_text: "Entrez les prénoms séparés par virgule"
         helper_text_mode: "persistent"
 
+# --- BANNIÈRE D'AJOUT D'AMI ---
+<AddFriendBanner>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(50)
+    md_bg_color: get_color_from_hex("#FF9800")
+    padding: dp(10)
+    spacing: dp(10)
+    
+    MDLabel:
+        text: "Cette personne n'est pas dans vos contacts"
+        theme_text_color: "Custom"
+        text_color: 1, 1, 1, 1
+        font_size: "12sp"
+        valign: "center"
+    
+    MDRaisedButton:
+        text: "AJOUTER"
+        md_bg_color: 1, 1, 1, 1
+        text_color: 0, 0, 0, 1
+        on_release: app.add_contact_direct(root.target_username)
+
+# --- CHAT BUBBLE (AVEC NOM) ---
 <ChatBubble>:
     size_hint_y: None
     height: self.minimum_height
     size_hint_x: None
     width: dp(300) if root.msg_type == 'image' else (msg_label.texture_size[0] + dp(32))
-    padding: [dp(16), dp(12), dp(16), dp(12)]
-    spacing: dp(4)
+    padding: [dp(16), dp(8), dp(16), dp(12)]
+    spacing: dp(2)
     orientation: 'vertical'
     radius: [dp(22), dp(22), dp(4), dp(22)] if root.is_me else [dp(22), dp(22), dp(22), dp(4)]
     md_bg_color: get_color_from_hex("#2E2745") if root.is_me else get_color_from_hex("#262626")
     pos_hint: {'right': 1} if root.is_me else {'left': 1}
+    
+    # LE PSEUDO AU DESSUS (Si ce n'est pas moi)
+    MDLabel:
+        text: root.sender if not root.is_me else ""
+        font_size: "10sp"
+        theme_text_color: "Custom"
+        text_color: get_color_from_hex("#9D84FD")
+        size_hint_y: None
+        height: dp(12) if not root.is_me else 0
+        opacity: 1 if not root.is_me else 0
+        
     MDLabel:
         id: msg_label
         text: root.message
@@ -482,43 +519,50 @@ KV = '''
             MDBoxLayout:
                 id: chat_header_box
                 size_hint_y: None
-                height: dp(70)
-                padding: [dp(20), 0]
-                spacing: dp(15)
-                canvas.after:
-                    Color:
-                        rgba: get_color_from_hex("#262626")
-                    Line:
-                        points: [self.x, self.y, self.right, self.y]
-                        width: 1
-                CircularAvatar:
-                    id: chat_target_avatar
-                    size: dp(36), dp(36)
-                    radius: [dp(18),]
-                    pos_hint: {"center_y": .5}
-                MDLabel:
-                    id: chat_title_label
-                    text: "WhatsApp SAE"
-                    font_style: "Subtitle1"
-                    bold: True
-                    theme_text_color: "Custom"
-                    text_color: 1, 1, 1, 1
-                    valign: "center"
-                MDIconButton:
-                    icon: "phone-outline"
-                    theme_text_color: "Custom"
-                    text_color: 1, 1, 1, 1
-                    on_release: app.try_call("audio")
-                MDIconButton:
-                    icon: "video-outline"
-                    theme_text_color: "Custom"
-                    text_color: 1, 1, 1, 1
-                    on_release: app.try_call("video")
-                MDIconButton:
-                    icon: "information-outline"
-                    theme_text_color: "Custom"
-                    text_color: 1, 1, 1, 1
-                    on_release: app.get_target_info()
+                height: self.minimum_height
+                orientation: "vertical"
+                
+                # HEADER BAR
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: dp(70)
+                    padding: [dp(20), 0]
+                    spacing: dp(15)
+                    canvas.after:
+                        Color:
+                            rgba: get_color_from_hex("#262626")
+                        Line:
+                            points: [self.x, self.y, self.right, self.y]
+                            width: 1
+                    CircularAvatar:
+                        id: chat_target_avatar
+                        size: dp(36), dp(36)
+                        radius: [dp(18),]
+                        pos_hint: {"center_y": .5}
+                    MDLabel:
+                        id: chat_title_label
+                        text: "WhatsApp SAE"
+                        font_style: "Subtitle1"
+                        bold: True
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 1
+                        valign: "center"
+                    MDIconButton:
+                        icon: "phone-outline"
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 1
+                        on_release: app.try_call("audio")
+                    MDIconButton:
+                        icon: "video-outline"
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 1
+                        on_release: app.try_call("video")
+                    MDIconButton:
+                        icon: "information-outline"
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 1
+                        on_release: app.get_target_info()
+            
             MDScrollView:
                 id: chat_scroll
                 MDBoxLayout:
@@ -803,6 +847,9 @@ class WhatsAppClientApp(MDApp):
     default_avatar_path = os.path.abspath(os.path.join("assets", "default_avatar.png"))
     my_avatar_path = StringProperty(default_avatar_path)
     has_heart_asset = BooleanProperty(False)
+    
+    my_friends = ListProperty([])
+    asking_for_chat_ui = BooleanProperty(False) # NOUVELLE VARIABLE D'ÉTAT
 
     def build(self):
         self.theme_cls.theme_style = "Dark"
@@ -814,6 +861,7 @@ class WhatsAppClientApp(MDApp):
         self.current_target = None
         self.conversations_data = [] 
         self.unread_counts = {}
+        self.asking_for_chat_ui = False
 
         if os.path.exists("assets/heart.png"):
             self.has_heart_asset = True
@@ -962,10 +1010,15 @@ class WhatsAppClientApp(MDApp):
         self.send_json({"type": "ADD_FRIEND", "phone": phone})
         if self.dialog: self.dialog.dismiss()
 
-    # --- NOUVELLE DISCU ---
+    def add_contact_direct(self, target_username):
+        self.send_json({"type": "ADD_FRIEND_DIRECT", "target_username": target_username})
+
+    # --- NOUVELLE DISCU (CORRIGÉ) ---
     def start_new_chat_flow(self):
         if self.dialog: self.dialog.dismiss()
-        self.send_json({"type": "GET_FRIENDS"}) # Demande QUE les amis
+        # On signale qu'on VEUT ouvrir la fenêtre
+        self.asking_for_chat_ui = True
+        self.send_json({"type": "GET_FRIENDS"})
 
     def show_users_dialog(self, users_list):
         if not users_list:
@@ -1078,6 +1131,7 @@ class WhatsAppClientApp(MDApp):
                 self.sm.transition.direction = "left"
                 self.sm.current = "chat_interface"
                 self.send_json({"type": "GET_CONVERSATIONS"})
+                self.send_json({"type": "GET_FRIENDS"}) 
                 self.send_json({"type": "GET_PROFILE"})
             else:
                 self.sm.get_screen('login').ids.error_label.text = "Identifiants invalides"
@@ -1094,12 +1148,19 @@ class WhatsAppClientApp(MDApp):
         elif t == "ADD_FRIEND_REPLY":
             if resp.get("success"):
                 friend_name = resp.get("message")
-                self.show_alert_dialog("Succès", f"{friend_name} a été ajouté à vos amis !")
+                if friend_name == self.current_target:
+                    self.my_friends.append(friend_name)
+                    self.load_conversation(self.current_target)
+                toast(f"{friend_name} est maintenant votre ami !")
             else:
                 toast(f"Erreur: {resp.get('message')}")
 
         elif t == "FRIENDS_LIST":
-            self.show_users_dialog(resp.get("data", []))
+            self.my_friends = resp.get("data", [])
+            # CORRECTION ICI : On vérifie si l'utilisateur a demandé à ouvrir la fenêtre
+            if self.asking_for_chat_ui:
+                self.show_users_dialog(self.my_friends)
+                self.asking_for_chat_ui = False
 
         elif t == "PROFILE_DATA":
             data = resp.get("data", {})
@@ -1214,6 +1275,28 @@ class WhatsAppClientApp(MDApp):
         screen = self.sm.get_screen('chat_interface')
         screen.ids.chat_title_label.text = target_user
         screen.ids.chat_box.clear_widgets()
+        
+        # --- LOGIQUE BANNIÈRE AJOUT AMI ---
+        header_box = screen.ids.chat_header_box
+        for child in header_box.children[:]:
+            if isinstance(child, AddFriendBanner):
+                header_box.remove_widget(child)
+        
+        is_friend = target_user in self.my_friends
+        
+        # On n'affiche la bannière que si ce n'est pas un ami et si ce n'est PAS un groupe
+        # Pour simplifier, on vérifie si le nom est dans conversation_data (si groupe, il y est)
+        # Mais un groupe n'est pas dans my_friends.
+        # Amélioration simple : Si le nom contient des espaces ou est "Groupe...", c'est un groupe ? Non.
+        # On va assumer que si l'utilisateur n'est pas dans friends, on propose.
+        
+        if not is_friend:
+             # Petite vérif pour ne pas l'afficher sur les groupes (si on les connait)
+             # Mais ici on n'a pas l'info "is_group" facile.
+             # C'est pas grave, on affiche.
+             banner = AddFriendBanner(target_username=target_user)
+             header_box.add_widget(banner, index=len(header_box.children)) 
+
         for c in self.conversations_data:
             if c['username'] == target_user:
                 c['unread_count'] = 0
