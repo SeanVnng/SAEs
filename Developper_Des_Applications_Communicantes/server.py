@@ -92,16 +92,19 @@ def handle_client(client_socket, addr):
                     except: pass
 
                 elif not current_username: continue
-
-                # --- NOUVEAU SYSTÈME D'AMIS ---
                 
+                # --- GESTION DES AMIS ---
                 elif msg_type == "ADD_FRIEND":
                     phone = msg.get("phone")
                     success, message = db.add_friend_by_phone(current_username, phone)
                     send_to_user(current_username, {"type": "ADD_FRIEND_REPLY", "success": success, "message": message})
 
+                elif msg_type == "ADD_FRIEND_DIRECT":
+                    target_username = msg.get("target_username")
+                    success, message = db.add_friend_by_username(current_username, target_username)
+                    send_to_user(current_username, {"type": "ADD_FRIEND_REPLY", "success": success, "message": message})
+
                 elif msg_type == "GET_FRIENDS":
-                    # On ne renvoie plus tout le monde, seulement les amis
                     friends = db.get_my_friends(current_username)
                     send_to_user(current_username, {"type": "FRIENDS_LIST", "data": friends})
 
