@@ -116,12 +116,28 @@ def handle_client(client_socket, addr):
                 elif msg_type == "CREATE_GROUP":
                     grp_name = msg.get("name")
                     members = msg.get("members")
+                    
                     if len(members) > 50:
                         send_to_user(current_username, {"type": "ERROR", "msg": "Trop de membres"})
                     else:
-                        members.append(current_username)
+                        # On ajoute le créateur à la liste s'il n'y est pas déjà
+                        if current_username not in members:
+                            members.append(current_username)
+                        
+                        # 1. Création en BDD
                         db.create_group(grp_name, current_username, members)
+                        
+                        # 2. Confirmation au créateur (pour qu'il bascule dessus immédiatement)
                         send_to_user(current_username, {"type": "GROUP_CREATED", "name": grp_name})
+                        
+                        # 3. Notification aux AUTRES membres
+                        for member in members:
+                            if member != current_username:
+                                send_to_user(member, {
+                                    "type": "NEW_GROUP_NOTIFICATION", 
+                                    "name": grp_name,
+                                    "creator": current_username
+                                })
 
                 elif msg_type == "MESSAGE":
                     receiver = msg.get("receiver")
@@ -141,17 +157,21 @@ def handle_client(client_socket, addr):
                         except: pass
 
                     is_group = False
-                    if db.get_group_members(receiver): 
+                    group_members = db.get_group_members(receiver)
+                    
+                    if group_members: 
+                        # C'EST UN GROUPE -> On active le mode is_group
                         is_group = True
                         db.save_message(current_username, None, content, m_type, file_path, group_name=receiver)
+                        
                         broadcast_data = {
                             "type": "NEW_MESSAGE", 
                             "sender": current_username, 
                             "content": content,
                             "msg_type": m_type,
                             "file_path": file_path,
-                            "is_group": True,
-                            "group_name": receiver
+                            "is_group": True,       # Important pour le client
+                            "group_name": receiver  # Important pour le client
                         }
                         broadcast_to_group(receiver, current_username, broadcast_data)
                     else:
@@ -169,6 +189,30 @@ def handle_client(client_socket, addr):
                     target = msg.get("target")
                     if target in clients:
                         send_to_user(target, {"type": "INCOMING_CALL", "sender": current_username, "media": msg.get("media")})
+
+                elif msg_type == "DOWNLOAD_IMAGE":
+                                    filename = msg.get("filename")
+                                    
+                                    # 1. On cherche d'abord dans les images de profil
+                                    file_path = os.path.join(IMAGE_FOLDER, filename)
+                                    if not os.path.exists(file_path):
+                                        # 2. Si pas trouvé, on cherche dans les fichiers du chat
+                                        file_path = os.path.join(FILE_FOLDER, filename)
+                                    
+                                    if os.path.exists(file_path):
+                                        try:
+                                            with open(file_path, "rb") as f:
+                                                image_data = base64.b64encode(f.read()).decode('utf-8')
+                                            send_to_user(current_username, {
+                                                "type": "IMAGE_DOWNLOAD_REPLY",
+                                                "filename": filename,
+                                                "data": image_data,
+                                                "success": True
+                                            })
+                                        except:
+                                            send_to_user(current_username, {"type": "IMAGE_DOWNLOAD_REPLY", "filename": filename, "success": False})
+                                    else:
+                                        send_to_user(current_username, {"type": "IMAGE_DOWNLOAD_REPLY", "filename": filename, "success": False})
 
                 elif msg_type == "CALL_RESPONSE":
                     send_to_user(msg.get("target"), {"type": "CALL_RESPONSE_REPLY", "responder": current_username, "response": msg.get("response")})
@@ -190,6 +234,8 @@ def handle_client(client_socket, addr):
 
                 elif msg_type == "GET_CONVERSATIONS":
                     send_to_user(current_username, {"type": "CONVERSATIONS_LIST", "data": db.get_user_conversations_rich(current_username)})
+
+                
 
             except json.JSONDecodeError: pass
         except: break
