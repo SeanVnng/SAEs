@@ -16,7 +16,6 @@ def create_tables():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Table Users
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +27,6 @@ def create_tables():
         )
     ''')
 
-    # Table Amis (NOUVEAU)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS friends (
             user_id INTEGER,
@@ -39,7 +37,6 @@ def create_tables():
         )
     ''')
 
-    # Table Messages
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +53,6 @@ def create_tables():
         )
     ''')
 
-    # Table Groupes
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS groups (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,12 +135,10 @@ def update_profile_pic(username, filename):
     except: return False
     finally: conn.close()
 
-# --- GESTION DES AMIS (NOUVEAU) ---
+# --- AMIS ---
 def add_friend_by_phone(my_username, target_phone):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # 1. Trouver l'ID de l'ami via son téléphone
     cursor.execute('SELECT id, username FROM users WHERE phone_number = ?', (target_phone,))
     friend = cursor.fetchone()
     
@@ -154,16 +148,13 @@ def add_friend_by_phone(my_username, target_phone):
         
     if friend['username'] == my_username:
         conn.close()
-        return False, "Vous ne pouvez pas vous ajouter vous-même"
+        return False, "Impossible de s'ajouter soi-même"
 
     my_id = get_user_id(my_username)
     friend_id = friend['id']
     
-    # 2. Ajouter la relation (On vérifie si existe déjà)
     try:
         cursor.execute('INSERT INTO friends (user_id, friend_id) VALUES (?, ?)', (my_id, friend_id))
-        # Optionnel : Ajouter dans l'autre sens aussi (Amitié réciproque automatique ?)
-        # Pour l'instant on fait simple : je t'ajoute à MES contacts
         conn.commit()
         conn.close()
         return True, friend['username']
@@ -171,17 +162,32 @@ def add_friend_by_phone(my_username, target_phone):
         conn.close()
         return False, "Déjà dans vos amis"
 
+# NOUVEAU : Ajout direct par Pseudo (pour le bouton)
+def add_friend_by_username(my_username, target_username):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    my_id = get_user_id(my_username)
+    friend_id = get_user_id(target_username)
+    
+    if not friend_id:
+        conn.close()
+        return False, "Utilisateur introuvable"
+
+    try:
+        cursor.execute('INSERT INTO friends (user_id, friend_id) VALUES (?, ?)', (my_id, friend_id))
+        conn.commit()
+        conn.close()
+        return True, target_username
+    except sqlite3.IntegrityError:
+        conn.close()
+        return False, "Déjà ami"
+
 def get_my_friends(username):
     user_id = get_user_id(username)
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    query = '''
-        SELECT u.username 
-        FROM friends f
-        JOIN users u ON f.friend_id = u.id
-        WHERE f.user_id = ?
-    '''
+    query = 'SELECT u.username FROM friends f JOIN users u ON f.friend_id = u.id WHERE f.user_id = ?'
     cursor.execute(query, (user_id,))
     res = cursor.fetchall()
     conn.close()
@@ -214,15 +220,11 @@ def save_message(sender_user, receiver_user, content, msg_type='text', file_path
         cursor.execute('SELECT id FROM groups WHERE name = ?', (group_name,))
         grp = cursor.fetchone()
         if grp:
-            cursor.execute('''
-                INSERT INTO messages (sender_id, group_id, content, msg_type, file_path) 
-                VALUES (?, ?, ?, ?, ?)''', (sender_id, grp['id'], content, msg_type, file_path))
+            cursor.execute('''INSERT INTO messages (sender_id, group_id, content, msg_type, file_path) VALUES (?, ?, ?, ?, ?)''', (sender_id, grp['id'], content, msg_type, file_path))
     else:
         receiver_id = get_user_id(receiver_user)
         if sender_id and receiver_id:
-            cursor.execute('''
-                INSERT INTO messages (sender_id, receiver_id, content, msg_type, file_path) 
-                VALUES (?, ?, ?, ?, ?)''', (sender_id, receiver_id, content, msg_type, file_path))
+            cursor.execute('''INSERT INTO messages (sender_id, receiver_id, content, msg_type, file_path) VALUES (?, ?, ?, ?, ?)''', (sender_id, receiver_id, content, msg_type, file_path))
             
     conn.commit()
     conn.close()
@@ -232,7 +234,6 @@ def get_conversation_history(user1, target):
     id1 = get_user_id(user1)
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     cursor.execute('SELECT id FROM groups WHERE name = ?', (target,))
     grp = cursor.fetchone()
     
@@ -247,8 +248,7 @@ def get_conversation_history(user1, target):
         cursor.execute(query, (grp['id'],))
     else:
         id2 = get_user_id(target)
-        if not id2: 
-            conn.close(); return []
+        if not id2: conn.close(); return []
         query = '''
             SELECT u.username AS sender, m.content, m.msg_type, m.file_path, m.timestamp
             FROM messages m
@@ -260,7 +260,6 @@ def get_conversation_history(user1, target):
         
     messages = cursor.fetchall()
     conn.close()
-    
     history = []
     for msg in messages:
         history.append({
@@ -275,11 +274,9 @@ def get_conversation_history(user1, target):
 def get_user_conversations_rich(username):
     user_id = get_user_id(username)
     if not user_id: return []
-    
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 1. Trouver les partenaires (Conversations existantes)
     partners = set()
     cursor.execute('''
         SELECT DISTINCT u.username FROM messages m
@@ -288,57 +285,33 @@ def get_user_conversations_rich(username):
     ''', (user_id, user_id, user_id))
     for row in cursor.fetchall(): partners.add(row['username'])
     
-    # + Groupes
     cursor.execute('SELECT name, members, id FROM groups')
     groups = cursor.fetchall()
     for grp in groups:
-        if username in json.loads(grp['members']):
-            partners.add(grp['name'])
+        if username in json.loads(grp['members']): partners.add(grp['name'])
             
     data = []
     for p in partners:
         is_group = False
         grp_id = None
         for g in groups:
-            if g['name'] == p: 
-                is_group = True
-                grp_id = g['id']
-                break
+            if g['name'] == p: is_group = True; grp_id = g['id']; break
         
-        last_msg = "Aucun message"
-        unread = 0
-        ts = "1970-01-01"
-        
+        last_msg = "Aucun message"; unread = 0; ts = "1970-01-01"
         if is_group:
             cursor.execute('SELECT content, timestamp FROM messages WHERE group_id = ? ORDER BY timestamp DESC LIMIT 1', (grp_id,))
             lm = cursor.fetchone()
-            if lm: 
-                last_msg = lm['content']
-                ts = lm['timestamp']
+            if lm: last_msg = lm['content']; ts = lm['timestamp']
         else:
             p_id = get_user_id(p)
-            cursor.execute('''
-                SELECT content, timestamp FROM messages 
-                WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-                ORDER BY timestamp DESC LIMIT 1
-            ''', (user_id, p_id, p_id, user_id))
+            cursor.execute('''SELECT content, timestamp FROM messages WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) ORDER BY timestamp DESC LIMIT 1''', (user_id, p_id, p_id, user_id))
             lm = cursor.fetchone()
-            if lm: 
-                last_msg = lm['content']
-                ts = lm['timestamp']
+            if lm: last_msg = lm['content']; ts = lm['timestamp']
             
-            cursor.execute('''
-                SELECT COUNT(*) FROM messages 
-                WHERE sender_id = ? AND receiver_id = ? AND is_read = 0
-            ''', (p_id, user_id))
+            cursor.execute('''SELECT COUNT(*) FROM messages WHERE sender_id = ? AND receiver_id = ? AND is_read = 0''', (p_id, user_id))
             unread = cursor.fetchone()[0]
 
-        data.append({
-            "username": p,
-            "last_msg": last_msg,
-            "unread_count": unread,
-            "timestamp": ts
-        })
+        data.append({"username": p, "last_msg": last_msg, "unread_count": unread, "timestamp": ts})
     
     data.sort(key=lambda x: x['timestamp'], reverse=True)
     conn.close()
