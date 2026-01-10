@@ -914,20 +914,7 @@ class WhatsAppClientApp(MDApp):
             print(f"Demande de téléchargement pour : {filename}")
             self.send_json({"type": "DOWNLOAD_IMAGE", "filename": filename})
             return self.default_avatar_path 
-
-    # ... [Le reste des méthodes call, UI, etc. est identique à v2.2] ...
-    # Je ne remets que la partie critique handle_response pour économiser l'espace
-    # Copie les méthodes : try_call, show_calling_dialog, show_incoming_call_dialog, 
-    # action_accept_call, action_decline_call, action_hangup, go_back_to_main, 
-    # retry_call, update_local_video, update_remote_video, toggle_camera, toggle_mic,
-    # open_menu_dialog, open_add_friend_dialog, add_friend_action, add_contact_direct,
-    # start_new_chat_flow, show_users_dialog, select_user_for_chat, open_group_create,
-    # create_group, get_target_info, show_target_info_dialog...
-    # Elles sont strictement identiques au code précédent.
-
-    # ... [Méthodes identiques ici] ...
-    # Pour que tu aies un fichier COMPLET, je te recolle TOUT pour éviter les erreurs de copier-coller.
-    
+  
     def try_call(self, media_type):
         if self.current_target:
             self.call_manager.request_call(self.current_target, with_video=(media_type=="video"))
@@ -1495,3 +1482,4 @@ class WhatsAppClientApp(MDApp):
 
 if __name__ == "__main__":
     WhatsAppClientApp().run()
+
