@@ -62,6 +62,7 @@ def view_database():
         if 'conn' in locals() and conn:
             conn.close()
 
+
 if __name__ == "__main__":
     view_database()
     input("Appuyez sur Entrée pour quitter...")
