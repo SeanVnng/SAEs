@@ -4,6 +4,7 @@ import json
 import os
 import base64
 import time
+import sys
 from datetime import datetime
 import random
 
@@ -23,6 +24,7 @@ from kivy.uix.behaviors import ButtonBehavior
 from kivy.graphics.texture import Texture
 from kivy.uix.widget import Widget
 from kivy.uix.image import AsyncImage
+from kivy.cache import Cache  # <--- IMPORT TRÈS IMPORTANT
 
 # KivyMD
 from kivymd.app import MDApp
@@ -41,9 +43,18 @@ from kivymd.uix.card import MDCard
 from kivymd.uix.floatlayout import MDFloatLayout
 
 # --- CONFIGURATION ---
-SERVER_IP = "127.0.0.1" 
+# METS TON IP HAMACHI ICI
+SERVER_IP = "25.47.174.224" 
 SERVER_PORT = 5000
 UDP_PORT = 9999
+
+def resource_path(relative_path):
+    """ Obtient le chemin absolu pour PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class CallManager:
     def __init__(self, app, server_ip, udp_port):
@@ -229,7 +240,6 @@ KV = '''
         helper_text: "Entrez les prénoms séparés par virgule"
         helper_text_mode: "persistent"
 
-# --- BANNIÈRE D'AJOUT D'AMI ---
 <AddFriendBanner>:
     orientation: "horizontal"
     size_hint_y: None
@@ -237,21 +247,18 @@ KV = '''
     md_bg_color: get_color_from_hex("#FF9800")
     padding: dp(10)
     spacing: dp(10)
-    
     MDLabel:
         text: "Cette personne n'est pas dans vos contacts"
         theme_text_color: "Custom"
         text_color: 1, 1, 1, 1
         font_size: "12sp"
         valign: "center"
-    
     MDRaisedButton:
         text: "AJOUTER"
         md_bg_color: 1, 1, 1, 1
         text_color: 0, 0, 0, 1
         on_release: app.add_contact_direct(root.target_username)
 
-# --- CHAT BUBBLE (AVEC NOM) ---
 <ChatBubble>:
     size_hint_y: None
     height: self.minimum_height
@@ -264,7 +271,6 @@ KV = '''
     md_bg_color: get_color_from_hex("#2E2745") if root.is_me else get_color_from_hex("#262626")
     pos_hint: {'right': 1} if root.is_me else {'left': 1}
     
-    # LE PSEUDO AU DESSUS (Si ce n'est pas moi)
     MDLabel:
         text: root.sender if not root.is_me else ""
         font_size: "10sp"
@@ -288,13 +294,16 @@ KV = '''
         text_size: dp(280), None 
         valign: 'middle'
         halign: 'left'
+        
     AsyncImage:
+        id: message_image
         source: root.file_path if root.msg_type == 'image' else ""
         size_hint_y: None
         height: dp(200) if root.msg_type == 'image' else 0
         allow_stretch: True
         keep_ratio: True
         opacity: 1 if root.msg_type == 'image' else 0
+        nocache: True
 
 <UserListItem>:
     text: root.username
@@ -306,7 +315,7 @@ KV = '''
     secondary_text_color: get_color_from_hex("#A8A8A8")
     md_bg_color: 0, 0, 0, 0
     ImageLeftWidget:
-        source: "assets/default_avatar.png"
+        source: app.default_avatar_path
         radius: [25, 25, 25, 25]
     
     MDLabel:
@@ -347,7 +356,7 @@ KV = '''
                 size: self.size
                 radius: [20,]
         FitImage:
-            source: "assets/default_avatar.png"
+            source: app.default_avatar_path
             size_hint: None, None
             size: dp(80), dp(80)
             radius: [40,]
@@ -521,8 +530,6 @@ KV = '''
                 size_hint_y: None
                 height: self.minimum_height
                 orientation: "vertical"
-                
-                # HEADER BAR
                 MDBoxLayout:
                     size_hint_y: None
                     height: dp(70)
@@ -539,6 +546,7 @@ KV = '''
                         size: dp(36), dp(36)
                         radius: [dp(18),]
                         pos_hint: {"center_y": .5}
+                        source: app.default_avatar_path
                     MDLabel:
                         id: chat_title_label
                         text: "WhatsApp SAE"
@@ -562,7 +570,6 @@ KV = '''
                         theme_text_color: "Custom"
                         text_color: 1, 1, 1, 1
                         on_release: app.get_target_info()
-            
             MDScrollView:
                 id: chat_scroll
                 MDBoxLayout:
@@ -643,7 +650,7 @@ KV = '''
             MDFloatLayout:
                 Image:
                     id: remote_video
-                    source: "assets/default_avatar.png"
+                    source: app.default_avatar_path
                     allow_stretch: True
                     keep_ratio: False
                     size_hint: 1, 1
@@ -844,12 +851,12 @@ class WhatsAppClientApp(MDApp):
     active_call_dialog = None
     username = StringProperty("")
     
-    default_avatar_path = os.path.abspath(os.path.join("assets", "default_avatar.png"))
+    default_avatar_path = resource_path(os.path.join("assets", "default_avatar.png"))
     my_avatar_path = StringProperty(default_avatar_path)
     has_heart_asset = BooleanProperty(False)
     
     my_friends = ListProperty([])
-    asking_for_chat_ui = BooleanProperty(False) # NOUVELLE VARIABLE D'ÉTAT
+    asking_for_chat_ui = BooleanProperty(False)
 
     def build(self):
         self.theme_cls.theme_style = "Dark"
@@ -863,7 +870,7 @@ class WhatsAppClientApp(MDApp):
         self.unread_counts = {}
         self.asking_for_chat_ui = False
 
-        if os.path.exists("assets/heart.png"):
+        if os.path.exists(resource_path(os.path.join("assets", "heart.png"))):
             self.has_heart_asset = True
 
         self.call_manager = CallManager(self, SERVER_IP, UDP_PORT)
@@ -884,9 +891,43 @@ class WhatsAppClientApp(MDApp):
         self.sm.add_widget(AudioCallScreen(name="audio_call_screen"))
         return self.sm
 
-    # ==========================================
-    # LOGIQUE APPELS
-    # ==========================================
+    # --- GESTION DU CACHE ET TÉLÉCHARGEMENT ---
+    def get_cache_path(self, filename):
+        # Utiliser un chemin absolu dans APPDATA pour éviter les erreurs de permissions
+        # et s'assurer que c'est le même pour le .exe et le .py
+        cache_dir = os.path.join(os.environ.get("APPDATA", "."), "WhatsAppSAE_Cache")
+        if not os.path.exists(cache_dir):
+            try:
+                os.makedirs(cache_dir)
+            except OSError: pass
+        return os.path.abspath(os.path.join(cache_dir, filename))
+
+    def download_image_if_needed(self, filename, is_avatar=False):
+        if not filename or filename == "default_avatar":
+            return self.default_avatar_path
+            
+        local_path = self.get_cache_path(filename)
+        
+        if os.path.exists(local_path):
+            return local_path 
+        else:
+            print(f"Demande de téléchargement pour : {filename}")
+            self.send_json({"type": "DOWNLOAD_IMAGE", "filename": filename})
+            return self.default_avatar_path 
+
+    # ... [Le reste des méthodes call, UI, etc. est identique à v2.2] ...
+    # Je ne remets que la partie critique handle_response pour économiser l'espace
+    # Copie les méthodes : try_call, show_calling_dialog, show_incoming_call_dialog, 
+    # action_accept_call, action_decline_call, action_hangup, go_back_to_main, 
+    # retry_call, update_local_video, update_remote_video, toggle_camera, toggle_mic,
+    # open_menu_dialog, open_add_friend_dialog, add_friend_action, add_contact_direct,
+    # start_new_chat_flow, show_users_dialog, select_user_for_chat, open_group_create,
+    # create_group, get_target_info, show_target_info_dialog...
+    # Elles sont strictement identiques au code précédent.
+
+    # ... [Méthodes identiques ici] ...
+    # Pour que tu aies un fichier COMPLET, je te recolle TOUT pour éviter les erreurs de copier-coller.
+    
     def try_call(self, media_type):
         if self.current_target:
             self.call_manager.request_call(self.current_target, with_video=(media_type=="video"))
@@ -975,9 +1016,6 @@ class WhatsAppClientApp(MDApp):
         self.call_manager.mic_active = not self.call_manager.mic_active
         toast(f"Micro {'activé' if self.call_manager.mic_active else 'désactivé'}")
 
-    # ==========================================
-    # INFOS & GROUPE
-    # ==========================================
     def open_menu_dialog(self):
         self.dialog = MDDialog(
             title="Menu",
@@ -990,7 +1028,6 @@ class WhatsAppClientApp(MDApp):
         )
         self.dialog.open()
 
-    # --- AJOUTER AMI ---
     def open_add_friend_dialog(self):
         if self.dialog: self.dialog.dismiss()
         content = AddFriendContent()
@@ -1013,10 +1050,8 @@ class WhatsAppClientApp(MDApp):
     def add_contact_direct(self, target_username):
         self.send_json({"type": "ADD_FRIEND_DIRECT", "target_username": target_username})
 
-    # --- NOUVELLE DISCU (CORRIGÉ) ---
     def start_new_chat_flow(self):
         if self.dialog: self.dialog.dismiss()
-        # On signale qu'on VEUT ouvrir la fenêtre
         self.asking_for_chat_ui = True
         self.send_json({"type": "GET_FRIENDS"})
 
@@ -1092,9 +1127,7 @@ class WhatsAppClientApp(MDApp):
         )
         self.dialog.open()
 
-    # ==========================================
-    # SOCKET HANDLING
-    # ==========================================
+    # --- HANDLE RESPONSE (AVEC LE FIX CACHE) ---
     def handle_response(self, resp):
         t = resp.get("type")
 
@@ -1125,6 +1158,35 @@ class WhatsAppClientApp(MDApp):
             screen = self.sm.get_screen('audio_call_screen')
             screen.status_text = "Appel terminé"
             Clock.schedule_once(lambda dt: self.go_back_to_main(), 2)
+
+        # --- LE GROS FIX EST ICI ---
+        elif t == "IMAGE_DOWNLOAD_REPLY":
+            if resp.get("success"):
+                filename = resp.get("filename")
+                img_data = resp.get("data")
+                save_path = self.get_cache_path(filename)
+                
+                try:
+                    # 1. Ecriture sécurisée
+                    with open(save_path, "wb") as f:
+                        f.write(base64.b64decode(img_data))
+                    
+                    # 2. NETTOYAGE DU CACHE KIVY (CRUCIAL)
+                    # On force Kivy à oublier l'ancienne version de cette image
+                    Cache.remove('kv.image', save_path)
+                    Cache.remove('kv.texture', save_path)
+
+                    # 3. Mise à jour de l'interface
+                    if filename in self.my_avatar_path:
+                        self.my_avatar_path = save_path
+                    
+                    if self.current_target:
+                        print(f"Image reçue et cache vidé pour {filename}. Refresh...")
+                        # Un petit délai pour être sûr que le fichier est clos
+                        Clock.schedule_once(lambda dt: self.load_conversation(self.current_target), 0.5)
+                    
+                except Exception as e:
+                    print(f"Erreur sauvegarde image: {e}")
 
         elif t == "LOGIN_REPLY":
             if resp.get("success"):
@@ -1157,21 +1219,30 @@ class WhatsAppClientApp(MDApp):
 
         elif t == "FRIENDS_LIST":
             self.my_friends = resp.get("data", [])
-            # CORRECTION ICI : On vérifie si l'utilisateur a demandé à ouvrir la fenêtre
             if self.asking_for_chat_ui:
                 self.show_users_dialog(self.my_friends)
                 self.asking_for_chat_ui = False
 
         elif t == "PROFILE_DATA":
             data = resp.get("data", {})
-            screen = self.sm.get_screen('profile')
-            screen.ids.profile_infos.text = data.get("infos", "")
-            screen.ids.profile_phone.text = data.get("phone_number", "")
-            server_path = data.get("profile_pic_path", "")
-            if server_path and server_path != "default_avatar":
-                 self.my_avatar_path = os.path.abspath(os.path.join("server_images", server_path))
+            if data.get("username") == self.username:
+                screen = self.sm.get_screen('profile')
+                screen.ids.profile_infos.text = data.get("infos", "")
+                screen.ids.profile_phone.text = data.get("phone_number", "")
+                server_filename = data.get("profile_pic_path", "")
+                if server_filename and server_filename != "default_avatar":
+                        self.my_avatar_path = self.download_image_if_needed(server_filename, is_avatar=True)
+                else:
+                        self.my_avatar_path = self.default_avatar_path
+            elif data.get("username") == self.current_target:
+                 server_filename = data.get("profile_pic_path", "")
+                 header_avatar = self.sm.get_screen('chat_interface').ids.chat_target_avatar
+                 if server_filename and server_filename != "default_avatar":
+                     header_avatar.source = self.download_image_if_needed(server_filename, is_avatar=True)
+                 else:
+                     header_avatar.source = self.default_avatar_path
             else:
-                 self.my_avatar_path = self.default_avatar_path
+                 self.show_target_info_dialog(data)
 
         elif t == "CONVERSATIONS_LIST":
             self.conversations_data = resp.get("data", [])
@@ -1185,7 +1256,7 @@ class WhatsAppClientApp(MDApp):
             
             full_path = ""
             if f_path:
-                full_path = os.path.abspath(os.path.join("server_files", f_path))
+                full_path = self.download_image_if_needed(f_path, is_avatar=False)
 
             if sender == self.current_target or (resp.get("is_group") and resp.get("group_name") == self.current_target):
                 self.add_message_bubble(sender, content, False, m_type, full_path)
@@ -1198,12 +1269,33 @@ class WhatsAppClientApp(MDApp):
                         c['unread_count'] += 1
                         found = True
                         break
-                
                 if not found:
                     self.conversations_data.insert(0, {'username': target, 'last_msg': content, 'unread_count': 1, 'timestamp': ''})
-                
                 self.refresh_sidebar()
                 toast(f"Message de {sender}")
+                
+        # --- AJOUTE CE BLOC DANS handle_response ---
+        elif t == "NEW_GROUP_NOTIFICATION":
+            grp_name = resp.get("name")
+            creator = resp.get("creator")
+            
+            # Vérifier si on a déjà ce groupe dans la liste pour éviter les doublons
+            found = False
+            for c in self.conversations_data:
+                if c['username'] == grp_name:
+                    found = True
+                    break
+            
+            if not found:
+                # On ajoute le groupe en haut de la liste
+                self.conversations_data.insert(0, {
+                    'username': grp_name, 
+                    'last_msg': f"Groupe créé par {creator}", 
+                    'unread_count': 1, 
+                    'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                self.refresh_sidebar()
+                toast(f"Vous avez été ajouté au groupe : {grp_name}")
 
         elif t == "HISTORY_REPLY":
             if resp.get("target") == self.current_target:
@@ -1212,11 +1304,12 @@ class WhatsAppClientApp(MDApp):
                 for msg in resp.get("data", []):
                     full_path = ""
                     if msg.get("file_path"):
-                        full_path = os.path.abspath(os.path.join("server_files", msg.get("file_path")))
+                        full_path = self.download_image_if_needed(msg.get("file_path"), is_avatar=False)
+                        
                     self.add_message_bubble(msg["sender"], msg["content"], msg["sender"] == self.username, msg.get("type", "text"), full_path)
 
         elif t == "TARGET_INFO_REPLY":
-            self.show_target_info_dialog(resp.get("data"))
+            pass
 
         elif t == "GROUP_CREATED":
             grp = resp.get("name")
@@ -1224,7 +1317,6 @@ class WhatsAppClientApp(MDApp):
             self.load_conversation(grp)
             self.refresh_sidebar()
 
-    # --- NETWORK BASE ---
     def connect_socket(self):
         if not self.is_connected:
             try:
@@ -1255,7 +1347,6 @@ class WhatsAppClientApp(MDApp):
             except: break
         self.is_connected = False
 
-    # --- UI HELPERS MODIFIÉS POUR DICT ---
     def refresh_sidebar(self, filter_text=""):
         conversations_list = self.sm.get_screen('chat_interface').ids.conversations_list
         conversations_list.clear_widgets()
@@ -1276,24 +1367,15 @@ class WhatsAppClientApp(MDApp):
         screen.ids.chat_title_label.text = target_user
         screen.ids.chat_box.clear_widgets()
         
-        # --- LOGIQUE BANNIÈRE AJOUT AMI ---
+        self.send_json({"type": "GET_TARGET_INFO", "target": target_user})
+        
         header_box = screen.ids.chat_header_box
         for child in header_box.children[:]:
             if isinstance(child, AddFriendBanner):
                 header_box.remove_widget(child)
         
         is_friend = target_user in self.my_friends
-        
-        # On n'affiche la bannière que si ce n'est pas un ami et si ce n'est PAS un groupe
-        # Pour simplifier, on vérifie si le nom est dans conversation_data (si groupe, il y est)
-        # Mais un groupe n'est pas dans my_friends.
-        # Amélioration simple : Si le nom contient des espaces ou est "Groupe...", c'est un groupe ? Non.
-        # On va assumer que si l'utilisateur n'est pas dans friends, on propose.
-        
         if not is_friend:
-             # Petite vérif pour ne pas l'afficher sur les groupes (si on les connait)
-             # Mais ici on n'a pas l'info "is_group" facile.
-             # C'est pas grave, on affiche.
              banner = AddFriendBanner(target_username=target_user)
              header_box.add_widget(banner, index=len(header_box.children)) 
 
@@ -1334,7 +1416,6 @@ class WhatsAppClientApp(MDApp):
         scroll_view = self.sm.get_screen('chat_interface').ids.chat_scroll
         Clock.schedule_once(lambda dt: setattr(scroll_view, 'scroll_y', 0), 0.1)
 
-    # --- NAVIGATION & FILES ---
     def go_to_register(self): self.sm.transition.direction = "left"; self.sm.current = "register"
     def go_to_login(self): self.sm.transition.direction = "right"; self.sm.current = "login"
     def show_profile_screen(self): self.sm.transition.direction = "right"; self.sm.current = "profile"; self.send_json({"type": "GET_PROFILE"})
@@ -1363,7 +1444,6 @@ class WhatsAppClientApp(MDApp):
         screen = self.sm.get_screen('profile')
         self.send_json({"type": "UPDATE_PROFILE", "infos": screen.ids.profile_infos.text, "phone": screen.ids.profile_phone.text})
     
-    # --- FILE MANAGER ---
     def open_file_picker(self):
         self.file_mode = "send"
         self.file_manager.show(os.path.expanduser("~"))
