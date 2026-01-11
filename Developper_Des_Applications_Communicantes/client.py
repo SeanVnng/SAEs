@@ -1365,15 +1365,30 @@ class PyTalkapp(MDApp):
             except: pass
 
     def receive_loop(self):
+        buffer = ""
+        decoder = json.JSONDecoder()
+        
         while self.is_connected:
             try:
-                data = self.sock.recv(1024 * 1024 * 5).decode('utf-8')
-                if not data: break
-                try:
-                    msg = json.loads(data)
-                    Clock.schedule_once(lambda dt: self.handle_response(msg))
-                except json.JSONDecodeError: pass
-            except: break
+                # On lit par paquets
+                chunk = self.sock.recv(8192).decode('utf-8')
+                if not chunk: break
+                
+                buffer += chunk
+                
+                # On décode tout ce qu'on peut
+                while buffer:
+                    try:
+                        obj, index = decoder.raw_decode(buffer)
+                        Clock.schedule_once(lambda dt: self.handle_response(obj))
+                        buffer = buffer[index:].lstrip()
+                    except json.JSONDecodeError:
+                        # Message incomplet, on attend la suite
+                        break
+                        
+            except Exception as e:
+                print(f"Erreur connexion: {e}")
+                break
         self.is_connected = False
 
     def refresh_sidebar(self, filter_text=""):
@@ -1471,7 +1486,22 @@ class PyTalkapp(MDApp):
     
     def save_profile(self):
         screen = self.sm.get_screen('profile')
-        self.send_json({"type": "UPDATE_PROFILE", "infos": screen.ids.profile_infos.text, "phone": screen.ids.profile_phone.text})
+        infos = screen.ids.profile_infos.text
+        phone = screen.ids.profile_phone.text.strip() 
+        
+        # --- VALIDATION DU NUMÉRO ---
+        if phone: # Si l'utilisateur a écrit quelque chose
+            if not phone.isdigit() or len(phone) != 10:
+                toast("Erreur : Le numéro doit faire exactement 10 chiffres !")
+                return # On arrête tout, on n'envoie rien au serveur
+
+        # Si tout est bon (ou si le champ est vide), on envoie
+        self.send_json({
+            "type": "UPDATE_PROFILE", 
+            "infos": infos, 
+            "phone": phone
+        })
+        toast("Profil mis à jour ")
     
     def open_file_picker(self):
         self.file_mode = "send"
