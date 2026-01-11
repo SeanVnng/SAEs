@@ -380,10 +380,7 @@ def delete_conversation_history(username, target):
         WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
     ''', (user_id, target_id, target_id, user_id))
     
-    # Supprime aussi l'amitié ? (Optionnel, ici on garde l'ami mais on vide le chat)
-    # Si tu veux supprimer l'ami : 
-    # cursor.execute('DELETE FROM friends WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)', (user_id, target_id, target_id, user_id))
-    
+   
     conn.commit()
     conn.close()
     return True
