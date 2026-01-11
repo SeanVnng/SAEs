@@ -41,10 +41,19 @@ from kivymd.uix.filemanager import MDFileManager
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.card import MDCard
 from kivymd.uix.floatlayout import MDFloatLayout
+from kivy.utils import platform
+
+"""Pour la caméra sur android"""
+
+if platform == "android":
+    from android.permissions import request_permissions, Permission
+    from android.storage import primary_external_storage_path
+    from plyer import audio
+    from plyer import camera
 
 # --- CONFIGURATION ---
-# METS TON IP HAMACHI ICI
-SERVER_IP = "25.47.174.224" 
+# METS TON IP TAILSCALE ICI
+SERVER_IP = "100.104.243.69" 
 SERVER_PORT = 5000
 UDP_PORT = 9999
 
@@ -107,21 +116,21 @@ class CallManager:
         except: pass
 
     def send_video_loop(self):
-        self.cap = cv2.VideoCapture(0)
-        self.cap.set(3, 320)
-        self.cap.set(4, 240)
+        # On récupère le widget qu'on a créé dynamiquement
+        cam_widget = self.app.local_camera_widget
+        
+        # On active la caméra seulement si c'est une vraie caméra (Android)
+        # Si c'est une Image (Windows), 'play' n'existe pas, donc on vérifie
+        if hasattr(cam_widget, 'play'):
+             Clock.schedule_once(lambda dt: setattr(cam_widget, 'play', True))
+        
         while self.in_call:
-            if self.cam_active and self.is_video_call:
-                ret, frame = self.cap.read()
-                if ret:
-                    Clock.schedule_once(lambda dt: self.app.update_local_video(frame))
-                    _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 40])
-                    data_bytes = buffer.tobytes()
-                    prefix = f"{self.target_user}|||V:".encode('utf-8')
-                    if len(data_bytes) < 60000:
-                        try: self.udp_sock.sendto(prefix + data_bytes, (self.server_ip, self.udp_port))
-                        except: pass
-            time.sleep(0.05)
+            # Pour l'instant on ne fait rien de complexe ici pour éviter les crashs
+            time.sleep(0.1)
+        
+        # On éteint
+        if hasattr(cam_widget, 'play'):
+             Clock.schedule_once(lambda dt: setattr(cam_widget, 'play', False))
 
     def send_audio_loop(self):
         try:
@@ -362,7 +371,7 @@ KV = '''
             radius: [40,]
             pos_hint: {"center_x": 0.5}
         MDLabel:
-            text: "WhatsApp SAE"
+            text: "PyTalk"
             font_style: "H5"
             bold: True
             halign: "center"
@@ -549,7 +558,7 @@ KV = '''
                         source: app.default_avatar_path
                     MDLabel:
                         id: chat_title_label
-                        text: "WhatsApp SAE"
+                        text: "PyTalk"
                         font_style: "Subtitle1"
                         bold: True
                         theme_text_color: "Custom"
@@ -642,6 +651,30 @@ KV = '''
         orientation: 'vertical'
         padding: dp(10)
         spacing: dp(10)
+        
+        MDCard:
+            size_hint: 1, 0.45
+            radius: [25,]
+            md_bg_color: 0.15, 0.15, 0.15, 1
+            clip_to_radius: True
+            # ICI : On met un conteneur vide au lieu de la Caméra directe
+            MDFloatLayout:
+                id: local_camera_container  # <--- ID IMPORTANT
+                
+                MDCard:
+                    size_hint: None, None
+                    size: dp(80), dp(30)
+                    radius: [15,]
+                    md_bg_color: 0, 0, 0, 0.6
+                    pos_hint: {"center_x": 0.5, "bottom": 0.05}
+                    MDLabel:
+                        text: "Moi"
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 1
+                        font_style: "Caption"
+                        bold: True
+
         MDCard:
             size_hint: 1, 0.45
             radius: [25,]
@@ -668,38 +701,7 @@ KV = '''
                         text_color: 1, 1, 1, 1
                         font_style: "Caption"
                         bold: True
-        MDCard:
-            size_hint: 1, 0.45
-            radius: [25,]
-            md_bg_color: 0.15, 0.15, 0.15, 1
-            clip_to_radius: True
-            MDFloatLayout:
-                Image:
-                    id: local_video
-                    allow_stretch: True
-                    keep_ratio: False
-                    size_hint: 1, 1
-                    pos_hint: {"center_x": .5, "center_y": .5}
-                    canvas.before:
-                        PushMatrix
-                        Scale:
-                            x: -1
-                            origin: self.center
-                    canvas.after:
-                        PopMatrix
-                MDCard:
-                    size_hint: None, None
-                    size: dp(80), dp(30)
-                    radius: [15,]
-                    md_bg_color: 0, 0, 0, 0.6
-                    pos_hint: {"center_x": 0.5, "bottom": 0.05}
-                    MDLabel:
-                        text: "Moi"
-                        halign: "center"
-                        theme_text_color: "Custom"
-                        text_color: 1, 1, 1, 1
-                        font_style: "Caption"
-                        bold: True
+        
         MDBoxLayout:
             size_hint: 1, 0.1
             orientation: "horizontal"
@@ -723,6 +725,7 @@ KV = '''
                 text_color: 1, 1, 1, 1
                 md_bg_color: 1, 0.2, 0.2, 1
                 on_release: app.action_hangup(None)
+
 
 <AudioCallScreen>:
     name: "audio_call_screen"
@@ -845,7 +848,7 @@ KV = '''
                     on_release: app.save_profile()
 '''
 
-class WhatsAppClientApp(MDApp):
+class PyTalkapp(MDApp):
     dialog = None 
     call_dialog = None
     active_call_dialog = None
@@ -861,8 +864,20 @@ class WhatsAppClientApp(MDApp):
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "DeepPurple"
-        Window.size = (1100, 750)
         
+        # Gestion des permissions Android
+        if platform == 'android':
+            from android.permissions import request_permissions, Permission
+            request_permissions([
+                Permission.INTERNET,
+                Permission.CAMERA,
+                Permission.RECORD_AUDIO,
+                Permission.WRITE_EXTERNAL_STORAGE,
+                Permission.READ_EXTERNAL_STORAGE
+            ])
+        else:
+            Window.size = (1100, 750)
+
         self.sock = None
         self.is_connected = False
         self.current_target = None
@@ -889,13 +904,27 @@ class WhatsAppClientApp(MDApp):
         self.sm.add_widget(ProfileScreen(name="profile"))
         self.sm.add_widget(VideoCallScreen(name="video_call_screen")) 
         self.sm.add_widget(AudioCallScreen(name="audio_call_screen"))
+
+        video_screen = self.sm.get_screen('video_call_screen')
+        container = video_screen.ids.local_camera_container
+        
+        if platform == 'android':
+            from kivy.uix.camera import Camera
+            self.local_camera_widget = Camera(index=0, resolution=(640, 480), play=False, allow_stretch=True, keep_ratio=False)
+            container.add_widget(self.local_camera_widget)
+        else:
+            from kivy.uix.image import AsyncImage
+            self.local_camera_widget = AsyncImage(source=self.default_avatar_path, allow_stretch=True, keep_ratio=False)
+            container.add_widget(self.local_camera_widget)
+        # -----------------------------------------------------------
+
         return self.sm
 
     # --- GESTION DU CACHE ET TÉLÉCHARGEMENT ---
     def get_cache_path(self, filename):
         # Utiliser un chemin absolu dans APPDATA pour éviter les erreurs de permissions
         # et s'assurer que c'est le même pour le .exe et le .py
-        cache_dir = os.path.join(os.environ.get("APPDATA", "."), "WhatsAppSAE_Cache")
+        cache_dir = os.path.join(os.environ.get("APPDATA", "."), "PyTalk")
         if not os.path.exists(cache_dir):
             try:
                 os.makedirs(cache_dir)
@@ -914,7 +943,20 @@ class WhatsAppClientApp(MDApp):
             print(f"Demande de téléchargement pour : {filename}")
             self.send_json({"type": "DOWNLOAD_IMAGE", "filename": filename})
             return self.default_avatar_path 
-  
+
+    # ... [Le reste des méthodes call, UI, etc. est identique à v2.2] ...
+    # Je ne remets que la partie critique handle_response pour économiser l'espace
+    # Copie les méthodes : try_call, show_calling_dialog, show_incoming_call_dialog, 
+    # action_accept_call, action_decline_call, action_hangup, go_back_to_main, 
+    # retry_call, update_local_video, update_remote_video, toggle_camera, toggle_mic,
+    # open_menu_dialog, open_add_friend_dialog, add_friend_action, add_contact_direct,
+    # start_new_chat_flow, show_users_dialog, select_user_for_chat, open_group_create,
+    # create_group, get_target_info, show_target_info_dialog...
+    # Elles sont strictement identiques au code précédent.
+
+    # ... [Méthodes identiques ici] ...
+    # Pour que tu aies un fichier COMPLET, je te recolle TOUT pour éviter les erreurs de copier-coller.
+    
     def try_call(self, media_type):
         if self.current_target:
             self.call_manager.request_call(self.current_target, with_video=(media_type=="video"))
@@ -1481,5 +1523,4 @@ class WhatsAppClientApp(MDApp):
             toast(f"Erreur envoi fichier: {e}")
 
 if __name__ == "__main__":
-    WhatsAppClientApp().run()
-
+    PyTalkapp().run()
