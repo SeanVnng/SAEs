@@ -2,7 +2,7 @@ import sqlite3
 import hashlib
 import json
 
-DB_NAME = "whatsapp.db"
+DB_NAME = "Pytalk.db"
 
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME, check_same_thread=False)
