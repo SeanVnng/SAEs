@@ -1,7 +1,7 @@
 import sqlite3
 
 # Nom du fichier de base de données
-DB_NAME = "whatsapp.db"
+DB_NAME = "Pytalk.db"
 
 def view_database():
     try:
@@ -66,3 +66,4 @@ def view_database():
 if __name__ == "__main__":
     view_database()
     input("Appuyez sur Entrée pour quitter...")
+
