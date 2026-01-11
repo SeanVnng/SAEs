@@ -1,4 +1,4 @@
-# 📱 WhatsApp SAE - Plateforme de Communication Temps Réel
+# 📱 PyTalk - Plateforme de Communication Temps Réel
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![KivyMD](https://img.shields.io/badge/GUI-KivyMD-2980B9?style=for-the-badge&logo=kivy&logoColor=white)
@@ -6,7 +6,7 @@
 ![Network](https://img.shields.io/badge/Network-TCP%2FUDP-E67E22?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production--Ready-2EA44F?style=for-the-badge)
 
-**WhatsApp SAE** est une solution complète de messagerie instantanée et de visioconférence développée en Python. Elle repose sur une architecture **Client-Serveur hybride** innovante, utilisant simultanément le protocole TCP pour la fiabilité des échanges textuels et UDP pour la performance du streaming vidéo.
+**PyTalk** est une solution complète de messagerie instantanée et de visioconférence développée en Python. Elle repose sur une architecture **Client-Serveur hybride** innovante, utilisant simultanément le protocole TCP pour la fiabilité des échanges textuels et UDP pour la performance du streaming vidéo.
 
 Conçu dans le cadre d'une Situation d'Apprentissage et d'Évaluation (SAE), ce projet démontre la mise en œuvre de concepts réseaux avancés couplés à une interface graphique moderne Material Design, compatible **Windows et Android**.
 
@@ -72,8 +72,8 @@ Le projet utilise une architecture hybride pour optimiser les performances :
 
 1.  **Cloner le dépôt :**
     ```bash
-    git clone [https://github.com/votre-username/whatsapp-sae.git](https://github.com/votre-username/whatsapp-sae.git)
-    cd whatsapp-sae
+    git clone [https://github.com/votre-username/PyTalk.git](https://github.com/votre-username/whatsapp-sae.git)
+    cd PyTalk
     ```
 
 2.  **Installer les bibliothèques Python :**
@@ -127,7 +127,6 @@ Pour rendre l'application accessible depuis n'importe où (4G/Internet), héberg
     cd sae
 
     # Lancer le serveur en tâche de fond avec Screen
-    screen -S whatsapp_server
     python3 server.py
     ```
     *Pour quitter le mode screen sans couper le serveur : `CTRL + A`, puis `D`.*
@@ -155,7 +154,7 @@ L'application est optimisée pour être compilée en `.apk` via **Buildozer** (r
 ## 📂 Structure du Projet
 
 ```text
-whatsapp-sae/
+PyTalk/
 │
 ├── assets/              # Ressources graphiques (Logo, Avatar par défaut)
 │   ├── default_avatar.png
@@ -171,3 +170,4 @@ whatsapp-sae/
 ├── whatsapp.db          # Fichier BDD (généré automatiquement au lancement)
 ├── buildozer.spec       # Configuration pour la compilation Android
 └── README.md            # Documentation du projet
+
