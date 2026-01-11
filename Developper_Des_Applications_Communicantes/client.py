@@ -1163,6 +1163,17 @@ class PyTalkapp(MDApp):
         if t == "INCOMING_CALL":
             self.show_incoming_call_dialog(resp.get("sender"), resp.get("media"))
 
+        elif t == "UPDATE_PROFILE_REPLY":
+            msg = resp.get("message")
+            success = resp.get("success")
+            if success:
+                toast(f"Ok !{msg}")
+            else:
+                # Affiche l'erreur (ex: Numéro déjà pris)
+                toast(f"Non ! {msg}")
+                # Optionnel : On peut remettre l'ancien numéro dans le champ si ça a échoué
+                self.send_json({"type": "GET_PROFILE"})
+
         elif t == "CALL_RESPONSE_REPLY":
             response = resp.get("response")
             responder = resp.get("responder")
@@ -1487,21 +1498,19 @@ class PyTalkapp(MDApp):
     def save_profile(self):
         screen = self.sm.get_screen('profile')
         infos = screen.ids.profile_infos.text
-        phone = screen.ids.profile_phone.text.strip() 
+        phone = screen.ids.profile_phone.text.strip()
         
-        # --- VALIDATION DU NUMÉRO ---
-        if phone: # Si l'utilisateur a écrit quelque chose
+        if phone:
             if not phone.isdigit() or len(phone) != 10:
-                toast("Erreur : Le numéro doit faire exactement 10 chiffres !")
-                return # On arrête tout, on n'envoie rien au serveur
+                toast("Erreur : Le numéro doit faire 10 chiffres !")
+                return
 
-        # Si tout est bon (ou si le champ est vide), on envoie
+        # On envoie juste la demande, on attend la réponse pour le Toast
         self.send_json({
             "type": "UPDATE_PROFILE", 
             "infos": infos, 
             "phone": phone
         })
-        toast("Profil mis à jour ")
     
     def open_file_picker(self):
         self.file_mode = "send"
