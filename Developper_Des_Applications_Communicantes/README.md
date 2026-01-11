@@ -72,7 +72,7 @@ Le projet utilise une architecture hybride pour optimiser les performances :
 
 1.  **Cloner le dépôt :**
     ```bash
-    git clone https://github.com/votre-username/PyTalk.git](https://github.com/votre-username/whatsapp-sae.git)](https://github.com/SeanVnng/SAEs/tree/main/Developper_Des_Applications_Communicantes
+    git clone https://github.com/SeanVnng/SAEs/tree/main/Developper_Des_Applications_Communicantes
     cd PyTalk
     ```
 
@@ -170,5 +170,6 @@ PyTalk/
 ├── whatsapp.db          # Fichier BDD (généré automatiquement au lancement)
 ├── buildozer.spec       # Configuration pour la compilation Android
 └── README.md            # Documentation du projet
+
 
 
