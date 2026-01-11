@@ -118,12 +118,24 @@ def get_user_profile(username):
 def update_user_profile(username, new_infos, new_phone):
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    if new_phone and len(new_phone) > 0:
+        cursor.execute('SELECT username FROM users WHERE phone_number = ? AND username != ?', (new_phone, username))
+        existing_user = cursor.fetchone()
+        
+        if existing_user:
+            conn.close()
+            # On retourne False et un message d'erreur
+            return False, "Ce numéro est déjà associé à un autre compte."
+
     try:
         cursor.execute('UPDATE users SET infos = ?, phone_number = ? WHERE username = ?', (new_infos, new_phone, username))
         conn.commit()
-        return True
-    except: return False
-    finally: conn.close()
+        conn.close()
+        return True, "Profil mis à jour avec succès."
+    except Exception as e:
+        conn.close()
+        return False, f"Erreur base de données: {e}"
 
 def update_profile_pic(username, filename):
     conn = get_db_connection()
