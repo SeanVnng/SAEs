@@ -242,7 +242,19 @@ def handle_client(client_socket, addr):
                         send_to_user(current_username, {"type": "PROFILE_DATA", "data": db.get_user_profile(current_username)})
 
                     elif msg_type == "UPDATE_PROFILE":
-                        db.update_user_profile(current_username, msg.get("infos"), msg.get("phone"))
+                    # On récupère le succès ET le message de la BDD
+                        success, message = db.update_user_profile(current_username, msg.get("infos"), msg.get("phone"))
+                    
+                    # On envoie la réponse au client pour qu'il affiche le toast
+                        send_to_user(current_username, {
+                            "type": "UPDATE_PROFILE_REPLY", 
+                            "success": success, 
+                            "message": message
+                        })
+                    
+                    # Si ça a marché, on renvoie les nouvelles infos pour mettre à jour l'affichage
+                        if success:
+                            send_to_user(current_username, {"type": "PROFILE_DATA", "data": db.get_user_profile(current_username)})
 
                     # --- AJOUT MANQUANT : MISE A JOUR PHOTO PROFIL ---
                     elif msg_type == "UPDATE_PROFILE_PIC":
