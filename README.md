@@ -8,10 +8,10 @@ Bienvenue sur ce dépôt qui regroupe **l’ensemble de mes SAÉ (Situations d�
 
 🔎 Chaque projet illustre des compétences techniques et professionnelles acquises au fil des semestres :  
 * **Administration et sécurisation de réseaux** (Cisco, Firewalls, VLANs).
-* **Développement d’outils** (Python, Web Fullstack).
+* **Développement d’outils & Applications** (Python, Sockets, Web Fullstack).
 * **Gestion de données** (SQL, Analyse de logs).
 * **Services informatiques** (Active Directory, DNS, DHCP, Web).
-* **Cybersécurité** (Analyse d'incidents, Filtrage, ACLs).
+* **Cybersécurité** (Analyse d'incidents, Filtrage, ACLs, Chiffrement).
 
 💡 *Ce dépôt témoigne de mon évolution technique et de ma capacité à mener des projets complexes, de la conception à la mise en production.*
 
@@ -61,7 +61,22 @@ Conception et déploiement d'une solution web (IP Address Management) permettant
 
 ---
 
-## 👤 Auteur & Contact
+### [4. 💬 SAE 32 - PyTalk (Messagerie Sécurisée)](./SAE32)
+**Développement d'une application de chat temps réel Cross-Platform.**
+
+Réalisation d'une application complète de messagerie instantanée (type WhatsApp) reposant sur une architecture Client/Serveur robuste. Le projet intègre des fonctionnalités avancées comme le transfert de fichiers (images), la gestion de profil, et le déploiement mobile.
+
+![Python](https://img.shields.io/badge/Python-3.x-blue?style=flat-square&logo=python)
+![Kivy](https://img.shields.io/badge/GUI-KivyMD-green?style=flat-square)
+![Android](https://img.shields.io/badge/Mobile-Android-3DDC84?style=flat-square&logo=android)
+![Socket](https://img.shields.io/badge/Network-Sockets%20TCP%2FUDP-orange?style=flat-square)
+
+* **Compétences :** Programmation Sockets (TCP/UDP), Threading, Base de données (SQLite), Interface Graphique (UI/UX), Compilation Mobile (Buildozer).
+* **Livrables :** Code source (Client/Serveur), Exécutable Windows (.exe), Application Android (.apk).
+
+---
+
+## 👤 Auteurs & Contact
 
 **Sean VAN NGOC**
 
@@ -90,4 +105,10 @@ Mon-Portfolio-BUT-RT/
 │   ├── README.md      
 │   ├── sae203.sql
 │   └── SITE/
-
+│
+└── SAE32/             
+    ├── README.md      
+    ├── client.py
+    ├── server.py
+    ├── buildozer.spec
+    └── assets/
