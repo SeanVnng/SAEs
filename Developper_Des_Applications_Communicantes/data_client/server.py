@@ -22,9 +22,14 @@ username_to_udp = {}
 def send_to_user(target_username, data):
     if target_username in clients:
         try:
-            clients[target_username].send(json.dumps(data).encode('utf-8'))
-        except:
-             print(f"Impossible d'envoyer à {target_username}")
+            # On utilise sendall au lieu de send pour garantir l'envoi complet des gros historiques
+            json_data = json.dumps(data).encode('utf-8')
+            clients[target_username].sendall(json_data) 
+        except Exception as e:
+             print(f"Erreur envoi à {target_username}: {e}")
+             # Si l'envoi échoue, on retire le client pour éviter les erreurs futures
+             if target_username in clients:
+                 del clients[target_username]
 
 def broadcast_to_group(group_name, sender, data):
     members = db.get_group_members(group_name)
@@ -105,7 +110,15 @@ def handle_client(client_socket, addr):
                     elif msg_type == "REGISTER":
                         user = msg.get("username")
                         pwd = msg.get("password")
-                        success = db.create_user(user, pwd)
+                        # --- NOUVEAU : On récupère les autres infos ---
+                        fname = msg.get("first_name")
+                        lname = msg.get("last_name")
+                        mail = msg.get("email")
+                        phone = msg.get("phone")
+                        
+                        # On appelle la nouvelle version de create_user
+                        success = db.create_user(user, pwd, fname, lname, mail, phone)
+                        
                         try:
                             client_socket.send(json.dumps({"type": "REGISTER_REPLY", "success": success}).encode('utf-8'))
                         except: pass
@@ -192,14 +205,21 @@ def handle_client(client_socket, addr):
                             }
                             broadcast_to_group(receiver, current_username, broadcast_data)
                         else:
-                            db.save_message(current_username, receiver, content, m_type, file_path)
+                            # On récupère le texte du message auquel on répond pour l'envoyer directement
+                            reply_text_content = msg.get("reply_content", "")
+                            
+                            db.save_message(current_username, receiver, content, m_type, file_path, reply_to_id=msg.get("reply_to_id"))
+                            
                             if receiver in clients:
                                 send_to_user(receiver, {
                                     "type": "NEW_MESSAGE", 
                                     "sender": current_username, 
                                     "content": content,
                                     "msg_type": m_type,
-                                    "file_path": file_path
+                                    "file_path": file_path,
+                                    # ON AJOUTE CES DEUX LIGNES :
+                                    "reply_to_id": msg.get("reply_to_id"),
+                                    "reply_content": reply_text_content
                                 })
 
                     elif msg_type == "CALL_REQUEST":
@@ -241,18 +261,23 @@ def handle_client(client_socket, addr):
                     elif msg_type == "GET_PROFILE":
                         send_to_user(current_username, {"type": "PROFILE_DATA", "data": db.get_user_profile(current_username)})
 
+                    # Dans server.py (vers la ligne 255)
+
                     elif msg_type == "UPDATE_PROFILE":
-                    # On récupère le succès ET le message de la BDD
-                        success, message = db.update_user_profile(current_username, msg.get("infos"), msg.get("phone"))
+                        # On récupère l'email en plus des autres infos
+                        infos = msg.get("infos")
+                        phone = msg.get("phone")
+                        email = msg.get("email") # <-- NOUVEAU
+
+                        # On appelle la nouvelle version de la fonction BDD
+                        success, message = db.update_user_profile(current_username, infos, phone, email)
                     
-                    # On envoie la réponse au client pour qu'il affiche le toast
                         send_to_user(current_username, {
                             "type": "UPDATE_PROFILE_REPLY", 
                             "success": success, 
                             "message": message
                         })
                     
-                    # Si ça a marché, on renvoie les nouvelles infos pour mettre à jour l'affichage
                         if success:
                             send_to_user(current_username, {"type": "PROFILE_DATA", "data": db.get_user_profile(current_username)})
 
@@ -302,6 +327,45 @@ def handle_client(client_socket, addr):
                         send_to_user(current_username, {"type": "HIDE_CONVERSATION_REPLY", "target": target})
                         send_to_user(current_username, {"type": "CONVERSATIONS_LIST", "data": db.get_user_conversations_rich(current_username)})
 
+                    elif msg_type == "REACTION":
+                        msg_id = msg.get("message_id")
+                        reac_type = msg.get("reaction")
+                        target = msg.get("target")
+                        action = msg.get("action", "add") # "add" ou "remove"
+                        
+                        # On passe l'action à la BDD
+                        db.update_message_reaction(msg_id, reac_type, action)
+                        
+                        broadcast_data = {
+                            "type": "MESSAGE_REACTION_UPDATE",
+                            "message_id": msg_id,
+                            "reaction": reac_type,
+                            "action": action # On prévient les autres
+                        }
+                        
+                        if db.get_group_members(target):
+                            broadcast_to_group(target, current_username, broadcast_data)
+                        else:
+                            send_to_user(target, broadcast_data)
+
+                    elif msg_type == "POLL":
+                        receiver = msg.get("receiver") # Doit être un groupe
+                        question = msg.get("question")
+                        options = msg.get("options")
+                        
+                        # On stocke le sondage en JSON
+                        poll_json = json.dumps({"question": question, "options": options, "votes": {}})
+                        db.save_message(current_username, None, question, "poll", poll_data=poll_json, group_name=receiver)
+                        
+                        broadcast_to_group(receiver, current_username, {
+                            "type": "NEW_MESSAGE",
+                            "sender": current_username,
+                            "content": question,
+                            "msg_type": "poll",
+                            "poll_options": options,
+                            "is_group": True,
+                            "group_name": receiver
+                        })
                     # --- FIN DU TRAITEMENT ---
 
                 except json.JSONDecodeError:
@@ -335,3 +399,4 @@ def start_server():
 
 if __name__ == "__main__":
     start_server()
+
