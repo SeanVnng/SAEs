@@ -72,7 +72,7 @@ Le projet utilise une architecture hybride pour optimiser les performances :
 
 1.  **Cloner le dépôt :**
     ```bash
-    git clone https://github.com/SeanVnng/SAEs/tree/main/Developper_Des_Applications_Communicantes
+    git clone [https://github.com/SeanVnng/SAEs/tree/main/Developper_Des_Applications_Communicantes](https://github.com/SeanVnng/SAEs/tree/main/Developper_Des_Applications_Communicantes)
     cd PyTalk
     ```
 
@@ -88,7 +88,7 @@ Le projet utilise une architecture hybride pour optimiser les performances :
 Pour tester l'application sur une seule machine :
 
 1.  **Lancer le Serveur :**
-    Il doit toujours être démarré en premier. Il initialisera la base de données `whatsapp.db`.
+    Il doit toujours être démarré en premier. Il initialisera la base de données `Pytalk.db`.
     ```bash
     python server.py
     ```
@@ -123,10 +123,11 @@ Pour rendre l'application accessible depuis n'importe où (4G/Internet), héberg
 2.  **Installation et Lancement :**
     ```bash
     # Cloner le projet (ou copier les fichiers server.py et database.py)
-    git clone [https://github.com/votre-repo/sae.git](https://github.com/votre-repo/sae.git)
-    cd sae
+    git clone [https://github.com/SeanVnng/SAEs/tree/main/Developper_Des_Applications_Communicantes](https://github.com/SeanVnng/SAEs/tree/main/Developper_Des_Applications_Communicantes)
+    cd PyTalk
 
     # Lancer le serveur en tâche de fond avec Screen
+    screen -S pytalk_server
     python3 server.py
     ```
     *Pour quitter le mode screen sans couper le serveur : `CTRL + A`, puis `D`.*
@@ -167,9 +168,6 @@ PyTalk/
 ├── client.py            # Code source de l'application (Interface & Logique)
 ├── server.py            # Code source du Serveur (Gestion Sockets + Threads)
 ├── database.py          # Gestion de la base de données SQLite (Requêtes)
-├── whatsapp.db          # Fichier BDD (généré automatiquement au lancement)
+├── Pytalk.db            # Fichier BDD (généré automatiquement au lancement)
 ├── buildozer.spec       # Configuration pour la compilation Android
 └── README.md            # Documentation du projet
-
-
-
