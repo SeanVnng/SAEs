@@ -17,14 +17,14 @@ import numpy as np
 from kivy.lang import Builder
 from kivy.core.window import Window
 from kivy.clock import Clock
-from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ListProperty
+from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ListProperty, ObjectProperty
 from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.graphics.texture import Texture
 from kivy.uix.widget import Widget
 from kivy.uix.image import AsyncImage
-from kivy.cache import Cache  # <--- IMPORT TRÈS IMPORTANT
+from kivy.cache import Cache 
 
 # KivyMD
 from kivymd.app import MDApp
@@ -44,7 +44,6 @@ from kivymd.uix.floatlayout import MDFloatLayout
 from kivy.utils import platform
 
 """Pour la caméra sur android"""
-
 if platform == "android":
     from android.permissions import request_permissions, Permission
     from android.storage import primary_external_storage_path
@@ -52,7 +51,6 @@ if platform == "android":
     from plyer import camera
 
 # --- CONFIGURATION ---
-# METS TON IP TAILSCALE ICI
 SERVER_IP = "100.104.243.69" 
 SERVER_PORT = 5000
 UDP_PORT = 9999
@@ -64,6 +62,29 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
+# --- CLASSE POUR GÉRER LE SURVOL DE LA SOURIS ---
+class HoverBehavior(object):
+    hovered = BooleanProperty(False)
+    border_point = ObjectProperty(None)
+
+    def __init__(self, **kwargs):
+        self.register_event_type('on_enter')
+        self.register_event_type('on_leave')
+        Window.bind(mouse_pos=self.on_mouse_pos)
+        super(HoverBehavior, self).__init__(**kwargs)
+
+    def on_mouse_pos(self, *args):
+        if not self.get_root_window(): return
+        pos = args[1]
+        inside = self.collide_point(*self.to_widget(*pos))
+        if self.hovered == inside: return
+        self.hovered = inside
+        if inside: self.dispatch('on_enter')
+        else: self.dispatch('on_leave')
+
+    def on_enter(self): pass
+    def on_leave(self): pass
 
 class CallManager:
     def __init__(self, app, server_ip, udp_port):
@@ -116,19 +137,13 @@ class CallManager:
         except: pass
 
     def send_video_loop(self):
-        # On récupère le widget qu'on a créé dynamiquement
         cam_widget = self.app.local_camera_widget
-        
-        # On active la caméra seulement si c'est une vraie caméra (Android)
-        # Si c'est une Image (Windows), 'play' n'existe pas, donc on vérifie
         if hasattr(cam_widget, 'play'):
              Clock.schedule_once(lambda dt: setattr(cam_widget, 'play', True))
         
         while self.in_call:
-            # Pour l'instant on ne fait rien de complexe ici pour éviter les crashs
             time.sleep(0.1)
         
-        # On éteint
         if hasattr(cam_widget, 'play'):
              Clock.schedule_once(lambda dt: setattr(cam_widget, 'play', False))
 
@@ -171,12 +186,22 @@ class CircularAvatar(ButtonBehavior, MDBoxLayout):
 class AddFriendBanner(MDBoxLayout):
     target_username = StringProperty()
 
-class ChatBubble(MDBoxLayout):
+class ChatBubble(MDBoxLayout, HoverBehavior):
     sender = StringProperty()
     message = StringProperty()
     is_me = BooleanProperty(False)
     msg_type = StringProperty("text")
     file_path = StringProperty("")
+    
+    # --- PROPRIÉTÉS MISES À JOUR ---
+    message_id = NumericProperty(0)
+    reply_content = StringProperty("")
+    likes = NumericProperty(0)
+    dislikes = NumericProperty(0)
+    poll_options = ListProperty([])
+    
+    # CORRECTION ICI : On initialise avec une chaîne vide "" et pas None
+    my_reaction = StringProperty("") 
 
 class UserListItem(TwoLineAvatarListItem):
     username = StringProperty()
@@ -186,6 +211,7 @@ class UserListItem(TwoLineAvatarListItem):
 class NewChatContent(MDBoxLayout): pass
 class GroupCreateContent(MDBoxLayout): pass
 class AddFriendContent(MDBoxLayout): pass
+class PollCreateContent(MDBoxLayout): pass 
 
 class GlowWidget(Widget):
     glow_color = ListProperty([1, 0, 0, 0.5])
@@ -249,6 +275,24 @@ KV = '''
         helper_text: "Entrez les prénoms séparés par virgule"
         helper_text_mode: "persistent"
 
+<PollCreateContent>:
+    orientation: "vertical"
+    spacing: "12dp"
+    size_hint_y: None
+    height: "250dp"
+    InstaTextField:
+        id: question
+        hint_text: "Question du sondage"
+    InstaTextField:
+        id: opt1
+        hint_text: "Option 1"
+    InstaTextField:
+        id: opt2
+        hint_text: "Option 2"
+    InstaTextField:
+        id: opt3
+        hint_text: "Option 3 (Optionnel)"
+
 <AddFriendBanner>:
     orientation: "horizontal"
     size_hint_y: None
@@ -269,50 +313,136 @@ KV = '''
         on_release: app.add_contact_direct(root.target_username)
 
 <ChatBubble>:
+    message_id: 0
+    reply_content: ""
+    likes: 0
+    dislikes: 0
+    poll_options: []
+    my_reaction: "" 
+
     size_hint_y: None
     height: self.minimum_height
     size_hint_x: None
-    width: dp(300) if root.msg_type == 'image' else (msg_label.texture_size[0] + dp(32))
-    padding: [dp(16), dp(8), dp(16), dp(12)]
-    spacing: dp(2)
+    width: dp(300) if root.msg_type == 'image' or root.msg_type == 'poll' else min(dp(300), (msg_label.texture_size[0] + dp(40)))
+    padding: [dp(12), dp(8), dp(12), dp(8)]
+    spacing: dp(5)
     orientation: 'vertical'
-    radius: [dp(22), dp(22), dp(4), dp(22)] if root.is_me else [dp(22), dp(22), dp(22), dp(4)]
+    radius: [dp(18), dp(18), dp(4), dp(18)] if root.is_me else [dp(18), dp(18), dp(18), dp(4)]
     md_bg_color: get_color_from_hex("#2E2745") if root.is_me else get_color_from_hex("#262626")
     pos_hint: {'right': 1} if root.is_me else {'left': 1}
     
+    # 1. NOM DE L'EXPÉDITEUR
     MDLabel:
         text: root.sender if not root.is_me else ""
-        font_size: "10sp"
+        font_size: "11sp"
+        bold: True
         theme_text_color: "Custom"
         text_color: get_color_from_hex("#9D84FD")
         size_hint_y: None
-        height: dp(12) if not root.is_me else 0
+        height: dp(14) if not root.is_me else 0
         opacity: 1 if not root.is_me else 0
-        
+
+    # 2. BLOC RÉPONSE
+    MDBoxLayout:
+        size_hint_y: None
+        height: dp(45) if root.reply_content else 0
+        opacity: 1 if root.reply_content else 0
+        md_bg_color: 1, 1, 1, 0.05
+        radius: [dp(8),]
+        padding: dp(8)
+        MDLabel:
+            text: root.reply_content
+            font_style: "Caption"
+            italic: True
+            theme_text_color: "Custom"
+            text_color: get_color_from_hex("#A8A8A8")
+            shorten: True
+            shorten_from: "right"
+
+    # 3. MESSAGE TEXTE
     MDLabel:
         id: msg_label
         text: root.message
         theme_text_color: "Custom"
-        text_color: (1, 1, 1, 1) if root.msg_type != 'call_log' else (1, 0.8, 0, 1)
-        font_style: "Body1" if root.msg_type != 'call_log' else "Caption"
-        italic: True if root.msg_type == 'call_log' else False
+        text_color: 1, 1, 1, 1
         font_size: "15sp"
         size_hint_y: None
-        height: self.texture_size[1] if root.msg_type != 'image' else 0
-        opacity: 1 if root.msg_type != 'image' else 0
-        text_size: dp(280), None 
-        valign: 'middle'
+        height: self.texture_size[1]
+        text_size: root.width - dp(24), None
         halign: 'left'
-        
+
+    # 4. IMAGE
     AsyncImage:
-        id: message_image
         source: root.file_path if root.msg_type == 'image' else ""
         size_hint_y: None
         height: dp(200) if root.msg_type == 'image' else 0
+        opacity: 1 if root.msg_type == 'image' else 0
         allow_stretch: True
         keep_ratio: True
-        opacity: 1 if root.msg_type == 'image' else 0
-        nocache: True
+
+    # 5. SONDAGE
+    MDBoxLayout:
+        id: poll_box
+        orientation: "vertical"
+        size_hint_y: None
+        height: self.minimum_height if root.msg_type == 'poll' else 0
+        opacity: 1 if root.msg_type == 'poll' else 0
+        spacing: dp(5)
+
+    # 6. BARRE DE RÉACTIONS
+    MDBoxLayout:
+        orientation: "horizontal"
+        size_hint_y: None
+        # On affiche si survolé OU si compteur > 0
+        height: dp(30) if (root.hovered or root.likes > 0 or root.dislikes > 0) else 0
+        opacity: 1 if (root.hovered or root.likes > 0 or root.dislikes > 0) else 0
+        spacing: dp(5)
+        padding: [0, dp(5), 0, 0]
+        
+        MDIconButton:
+            icon: "thumb-up" if root.my_reaction == "like" else "thumb-up-outline"
+            user_font_size: "16sp"
+            theme_text_color: "Custom"
+            text_color: get_color_from_hex("#9D84FD") if root.my_reaction == "like" else get_color_from_hex("#A8A8A8")
+            pos_hint: {"center_y": .5}
+            on_release: app.send_reaction(root.message_id, "like")
+        
+        MDLabel:
+            text: str(root.likes)
+            font_size: "12sp"
+            theme_text_color: "Custom"
+            text_color: get_color_from_hex("#A8A8A8")
+            size_hint_x: None
+            width: dp(20)
+            pos_hint: {"center_y": .5}
+
+        MDIconButton:
+            icon: "thumb-down" if root.my_reaction == "dislike" else "thumb-down-outline"
+            user_font_size: "16sp"
+            theme_text_color: "Custom"
+            text_color: get_color_from_hex("#FF4444") if root.my_reaction == "dislike" else get_color_from_hex("#A8A8A8")
+            pos_hint: {"center_y": .5}
+            on_release: app.send_reaction(root.message_id, "dislike")
+            
+        MDLabel:
+            text: str(root.dislikes)
+            font_size: "12sp"
+            theme_text_color: "Custom"
+            text_color: get_color_from_hex("#A8A8A8")
+            size_hint_x: None
+            width: dp(20)
+            pos_hint: {"center_y": .5}
+        
+        Widget: 
+            size_hint_x: 1
+            
+        MDIconButton:
+            icon: "reply-outline"
+            user_font_size: "16sp"
+            theme_text_color: "Custom"
+            text_color: get_color_from_hex("#9D84FD")
+            pos_hint: {"center_y": .5}
+            on_release: app.prepare_reply(root.message_id, root.message)
 
 <UserListItem>:
     text: root.username
@@ -412,10 +542,10 @@ KV = '''
     md_bg_color: get_color_from_hex("#333232")
     MDBoxLayout:
         size_hint: None, None
-        size: dp(350), dp(550)
+        size: dp(350), dp(750) 
         pos_hint: {"center_x": 0.5, "center_y": 0.5}
         orientation: "vertical"
-        spacing: dp(15)
+        spacing: dp(10)
         padding: dp(20)
         canvas.before:
             Color:
@@ -424,6 +554,7 @@ KV = '''
                 pos: self.pos
                 size: self.size
                 radius: [20,]
+        
         MDLabel:
             text: "Créer un compte"
             font_style: "H5"
@@ -431,6 +562,22 @@ KV = '''
             halign: "center"
             theme_text_color: "Custom"
             text_color: 1, 1, 1, 1
+            size_hint_y: None
+            height: dp(40)
+
+        InstaTextField:
+            id: reg_lastname
+            hint_text: "Nom"
+        InstaTextField:
+            id: reg_firstname
+            hint_text: "Prénom"
+        InstaTextField:
+            id: reg_email
+            hint_text: "Email"
+        InstaTextField:
+            id: reg_phone
+            hint_text: "Téléphone"
+            input_filter: "int"
         InstaTextField:
             id: reg_user
             hint_text: "Nom d'utilisateur"
@@ -438,6 +585,7 @@ KV = '''
             id: reg_password
             hint_text: "Mot de passe"
             password: True
+            
         MDLabel:
             id: reg_error_label
             text: ""
@@ -445,6 +593,7 @@ KV = '''
             halign: "center"
             size_hint_y: None
             height: dp(30)
+            
         MDFillRoundFlatButton:
             text: "S'inscrire"
             font_size: "14sp"
@@ -452,6 +601,7 @@ KV = '''
             size_hint_x: 1
             md_bg_color: get_color_from_hex("#2E2745")
             on_release: app.register_action()
+            
         MDFlatButton:
             text: "Retour à la connexion"
             theme_text_color: "Custom"
@@ -463,12 +613,14 @@ KV = '''
     MDBoxLayout:
         orientation: "horizontal"
         md_bg_color: get_color_from_hex("#333232")
+        
         MDBoxLayout:
             orientation: "vertical"
             size_hint_x: 0.3
             md_bg_color: get_color_from_hex("#262626")
             padding: 0
             spacing: 0
+            
             MDBoxLayout:
                 size_hint_y: None
                 height: dp(70)
@@ -493,6 +645,7 @@ KV = '''
                     text_color: 1, 1, 1, 1
                     pos_hint: {"center_y": .5}
                     on_release: app.open_menu_dialog()
+            
             MDBoxLayout:
                 size_hint_y: None
                 height: dp(60)
@@ -517,6 +670,7 @@ KV = '''
                         multiline: False
                         pos_hint: {"center_y": .5}
                         on_text: app.filter_conversations(self.text)
+            
             MDLabel:
                 text: "Discussions"
                 font_style: "Subtitle2"
@@ -526,14 +680,17 @@ KV = '''
                 size_hint_y: None
                 height: dp(40)
                 padding_x: dp(24)
+            
             MDScrollView:
                 bar_width: 0
                 MDList:
                     id: conversations_list
+        
         MDBoxLayout:
             orientation: "vertical"
             size_hint_x: 0.7
             md_bg_color: get_color_from_hex("#333232")
+            
             MDBoxLayout:
                 id: chat_header_box
                 size_hint_y: None
@@ -579,6 +736,7 @@ KV = '''
                         theme_text_color: "Custom"
                         text_color: 1, 1, 1, 1
                         on_release: app.get_target_info()
+            
             MDScrollView:
                 id: chat_scroll
                 MDBoxLayout:
@@ -588,43 +746,88 @@ KV = '''
                     height: self.minimum_height
                     padding: [dp(20), dp(20)]
                     spacing: dp(8)
+            
             MDBoxLayout:
+                orientation: "vertical"
                 size_hint_y: None
-                height: dp(80)
-                padding: [dp(20), dp(20)]
-                spacing: dp(10)
+                height: self.minimum_height
                 md_bg_color: get_color_from_hex("#333232")
+
                 MDBoxLayout:
-                    size_hint: 1, None
-                    height: dp(44)
-                    radius: [dp(22),]
-                    md_bg_color: get_color_from_hex("#262626")
-                    padding: [dp(15), 0]
+                    id: reply_preview_box
+                    size_hint_y: None
+                    height: 0
+                    opacity: 0
+                    md_bg_color: get_color_from_hex("#202020")
+                    padding: [dp(20), dp(5)]
+                    spacing: dp(10)
+                    
+                    MDIcon:
+                        icon: "reply"
+                        theme_text_color: "Custom"
+                        text_color: get_color_from_hex("#9D84FD")
+                        pos_hint: {"center_y": .5}
+                    
                     MDBoxLayout:
-                        orientation: "horizontal"
-                        MDIconButton:
-                            icon: "paperclip"
+                        orientation: "vertical"
+                        pos_hint: {"center_y": .5}
+                        MDLabel:
+                            text: "Répondre à :"
+                            font_size: "10sp"
+                            theme_text_color: "Custom"
+                            text_color: get_color_from_hex("#A8A8A8")
+                        MDLabel:
+                            id: reply_preview_text
+                            text: "..."
+                            font_style: "Caption"
                             theme_text_color: "Custom"
                             text_color: 1, 1, 1, 1
-                            pos_hint: {"center_y": .5}
-                            on_release: app.open_file_picker()
-                        TextInput:
-                            id: msg_input
-                            hint_text: "Votre message..."
-                            hint_text_color: get_color_from_hex("#A8A8A8")
-                            background_color: 0,0,0,0
-                            foreground_color: 1,1,1,1
-                            cursor_color: 1,1,1,1
-                            font_size: "15sp"
-                            multiline: False
-                            on_text_validate: app.send_message()
-                            padding_y: [self.height / 2.0 - (self.line_height / 2.0) * len(self._lines), 0]
-                        MDIconButton:
-                            icon: "send"
-                            theme_text_color: "Custom"
-                            text_color: get_color_from_hex("#9D84FD")
-                            pos_hint: {"center_y": .5}
-                            on_release: app.send_message()
+                            shorten: True
+                    
+                    MDIconButton:
+                        icon: "close"
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 1
+                        pos_hint: {"center_y": .5}
+                        on_release: app.cancel_reply()
+
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: dp(80)
+                    padding: [dp(20), dp(20)]
+                    spacing: dp(10)
+                    
+                    MDBoxLayout:
+                        size_hint: 1, None
+                        height: dp(44)
+                        radius: [dp(22),]
+                        md_bg_color: get_color_from_hex("#262626")
+                        padding: [dp(15), 0]
+                        MDBoxLayout:
+                            orientation: "horizontal"
+                            MDIconButton:
+                                icon: "paperclip"
+                                theme_text_color: "Custom"
+                                text_color: 1, 1, 1, 1
+                                pos_hint: {"center_y": .5}
+                                on_release: app.open_file_picker()
+                            TextInput:
+                                id: msg_input
+                                hint_text: "Votre message..."
+                                hint_text_color: get_color_from_hex("#A8A8A8")
+                                background_color: 0,0,0,0
+                                foreground_color: 1,1,1,1
+                                cursor_color: 1,1,1,1
+                                font_size: "15sp"
+                                multiline: False
+                                on_text_validate: app.send_message()
+                                padding_y: [self.height / 2.0 - (self.line_height / 2.0) * len(self._lines), 0]
+                            MDIconButton:
+                                icon: "send"
+                                theme_text_color: "Custom"
+                                text_color: get_color_from_hex("#9D84FD")
+                                pos_hint: {"center_y": .5}
+                                on_release: app.send_message()
 
 <GlowWidget>:
     canvas:
@@ -657,10 +860,8 @@ KV = '''
             radius: [25,]
             md_bg_color: 0.15, 0.15, 0.15, 1
             clip_to_radius: True
-            # ICI : On met un conteneur vide au lieu de la Caméra directe
             MDFloatLayout:
-                id: local_camera_container  # <--- ID IMPORTANT
-                
+                id: local_camera_container
                 MDCard:
                     size_hint: None, None
                     size: dp(80), dp(30)
@@ -725,7 +926,6 @@ KV = '''
                 text_color: 1, 1, 1, 1
                 md_bg_color: 1, 0.2, 0.2, 1
                 on_release: app.action_hangup(None)
-
 
 <AudioCallScreen>:
     name: "audio_call_screen"
@@ -826,19 +1026,27 @@ KV = '''
                         theme_text_color: "Custom"
                         text_color: get_color_from_hex("#9D84FD")
                         font_style: "Body1"
+                
                 InstaTextField:
                     id: profile_username
                     hint_text: "Pseudo"
                     text: app.username
                     disabled: True
+                
                 InstaTextField:
                     id: profile_infos
                     hint_text: "Bio"
                     multiline: True
+                
+                InstaTextField:
+                    id: profile_email
+                    hint_text: "Email"
+
                 InstaTextField:
                     id: profile_phone
                     hint_text: "Téléphone"
                     input_filter: "int"
+                
                 MDFillRoundFlatButton:
                     text: "Enregistrer"
                     font_size: "14sp"
@@ -861,11 +1069,14 @@ class PyTalkapp(MDApp):
     my_friends = ListProperty([])
     asking_for_chat_ui = BooleanProperty(False)
 
+    # --- VARIABLES POUR LA RÉPONSE ---
+    current_reply_id = None
+    current_reply_text = StringProperty("") # <--- On stocke le texte ici
+
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "DeepPurple"
         
-        # Gestion des permissions Android
         if platform == 'android':
             from android.permissions import request_permissions, Permission
             request_permissions([
@@ -916,14 +1127,10 @@ class PyTalkapp(MDApp):
             from kivy.uix.image import AsyncImage
             self.local_camera_widget = AsyncImage(source=self.default_avatar_path, allow_stretch=True, keep_ratio=False)
             container.add_widget(self.local_camera_widget)
-        # -----------------------------------------------------------
 
         return self.sm
 
-    # --- GESTION DU CACHE ET TÉLÉCHARGEMENT ---
     def get_cache_path(self, filename):
-        # Utiliser un chemin absolu dans APPDATA pour éviter les erreurs de permissions
-        # et s'assurer que c'est le même pour le .exe et le .py
         cache_dir = os.path.join(os.environ.get("APPDATA", "."), "PyTalk")
         if not os.path.exists(cache_dir):
             try:
@@ -943,19 +1150,73 @@ class PyTalkapp(MDApp):
             print(f"Demande de téléchargement pour : {filename}")
             self.send_json({"type": "DOWNLOAD_IMAGE", "filename": filename})
             return self.default_avatar_path 
+        
+    def send_reaction(self, msg_id, reaction):
+        if not self.current_target: return
+        
+        # 1. On cherche la bulle concernée pour vérifier l'état actuel
+        chat_box = self.sm.get_screen('chat_interface').ids.chat_box
+        target_bubble = None
+        for bubble in chat_box.children:
+            if bubble.message_id == msg_id:
+                target_bubble = bubble
+                break
+        
+        if not target_bubble: return
 
-    # ... [Le reste des méthodes call, UI, etc. est identique à v2.2] ...
-    # Je ne remets que la partie critique handle_response pour économiser l'espace
-    # Copie les méthodes : try_call, show_calling_dialog, show_incoming_call_dialog, 
-    # action_accept_call, action_decline_call, action_hangup, go_back_to_main, 
-    # retry_call, update_local_video, update_remote_video, toggle_camera, toggle_mic,
-    # open_menu_dialog, open_add_friend_dialog, add_friend_action, add_contact_direct,
-    # start_new_chat_flow, show_users_dialog, select_user_for_chat, open_group_create,
-    # create_group, get_target_info, show_target_info_dialog...
-    # Elles sont strictement identiques au code précédent.
+        # 2. Logique de bascule (Toggle)
+        action = "add"
+        
+        # Si je clique sur ce que j'ai déjà mis -> J'enlève (Toggle OFF)
+        if target_bubble.my_reaction == reaction:
+            action = "remove"
+            # CORRECTION : On remet à une chaîne vide, pas None
+            target_bubble.my_reaction = ""
+            # Mise à jour visuelle locale
+            if reaction == "like": target_bubble.likes -= 1
+            else: target_bubble.dislikes -= 1
+            
+        else:
+            # Si j'avais mis l'inverse avant (ex: j'avais mis dislike, je mets like)
+            if target_bubble.my_reaction:
+                # On annule l'ancienne réaction visuellement
+                if target_bubble.my_reaction == "like": target_bubble.likes -= 1
+                else: target_bubble.dislikes -= 1
+            
+            # On applique la nouvelle
+            target_bubble.my_reaction = reaction
+            if reaction == "like": target_bubble.likes += 1
+            else: target_bubble.dislikes += 1
 
-    # ... [Méthodes identiques ici] ...
-    # Pour que tu aies un fichier COMPLET, je te recolle TOUT pour éviter les erreurs de copier-coller.
+        # 3. Envoi au serveur
+        self.send_json({
+            "type": "REACTION",
+            "target": self.current_target,
+            "message_id": msg_id,
+            "reaction": reaction,
+            "action": action 
+        })
+
+    def prepare_reply(self, msg_id, content):
+        self.current_reply_id = msg_id
+        self.current_reply_text = content # On sauvegarde le texte
+        
+        preview_box = self.sm.get_screen('chat_interface').ids.reply_preview_box
+        preview_text = self.sm.get_screen('chat_interface').ids.reply_preview_text
+        
+        preview_text.text = content
+        
+        preview_box.height = dp(50)
+        preview_box.opacity = 1
+        
+        self.sm.get_screen('chat_interface').ids.msg_input.focus = True
+
+    def cancel_reply(self):
+        self.current_reply_id = None
+        self.current_reply_text = ""
+        preview_box = self.sm.get_screen('chat_interface').ids.reply_preview_box
+        preview_box.height = 0
+        preview_box.opacity = 0
     
     def try_call(self, media_type):
         if self.current_target:
@@ -1046,14 +1307,18 @@ class PyTalkapp(MDApp):
         toast(f"Micro {'activé' if self.call_manager.mic_active else 'désactivé'}")
 
     def open_menu_dialog(self):
+        menu_items = [
+            OneLineAvatarIconListItem(text="Ajouter un ami", on_release=lambda x: self.open_add_friend_dialog()),
+            OneLineAvatarIconListItem(text="Nouvelle discussion", on_release=lambda x: self.start_new_chat_flow()),
+            OneLineAvatarIconListItem(text="Créer un groupe", on_release=lambda x: self.open_group_create())
+        ]
+        
+        menu_items.append(OneLineAvatarIconListItem(text="Créer un sondage (Groupe)", on_release=lambda x: self.open_poll_dialog()))
+
         self.dialog = MDDialog(
             title="Menu",
             type="simple",
-            items=[
-                OneLineAvatarIconListItem(text="Ajouter un ami", on_release=lambda x: self.open_add_friend_dialog()),
-                OneLineAvatarIconListItem(text="Nouvelle discussion", on_release=lambda x: self.start_new_chat_flow()),
-                OneLineAvatarIconListItem(text="Créer un groupe", on_release=lambda x: self.open_group_create())
-            ],
+            items=menu_items,
         )
         self.dialog.open()
 
@@ -1143,6 +1408,46 @@ class PyTalkapp(MDApp):
         self.send_json({"type": "CREATE_GROUP", "name": name, "members": members})
         if self.dialog: self.dialog.dismiss()
 
+    def open_poll_dialog(self):
+        if self.dialog: self.dialog.dismiss()
+        
+        if self.current_target in self.my_friends:
+             toast("Les sondages sont réservés aux groupes !")
+             return
+
+        content = PollCreateContent()
+        self.dialog = MDDialog(
+            title="Nouveau Sondage",
+            type="custom",
+            content_cls=content,
+            buttons=[
+                MDFlatButton(text="ANNULER", on_release=lambda x: self.dialog.dismiss()),
+                MDFillRoundFlatButton(text="PUBLIER", on_release=lambda x: self.send_poll(content))
+            ]
+        )
+        self.dialog.open()
+
+    def send_poll(self, content):
+        q = content.ids.question.text
+        o1 = content.ids.opt1.text
+        o2 = content.ids.opt2.text
+        o3 = content.ids.opt3.text
+        
+        if not q or not o1 or not o2:
+            toast("Il faut une question et au moins 2 options")
+            return
+            
+        opts = [o1, o2]
+        if o3: opts.append(o3)
+        
+        self.send_json({
+            "type": "POLL",
+            "receiver": self.current_target,
+            "question": q,
+            "options": opts
+        })
+        if self.dialog: self.dialog.dismiss()
+
     def get_target_info(self):
         if self.current_target:
             self.send_json({"type": "GET_TARGET_INFO", "target": self.current_target})
@@ -1156,7 +1461,6 @@ class PyTalkapp(MDApp):
         )
         self.dialog.open()
 
-    # --- HANDLE RESPONSE (AVEC LE FIX CACHE) ---
     def handle_response(self, resp):
         t = resp.get("type")
 
@@ -1169,9 +1473,7 @@ class PyTalkapp(MDApp):
             if success:
                 toast(f"Ok !{msg}")
             else:
-                # Affiche l'erreur (ex: Numéro déjà pris)
                 toast(f"Non ! {msg}")
-                # Optionnel : On peut remettre l'ancien numéro dans le champ si ça a échoué
                 self.send_json({"type": "GET_PROFILE"})
 
         elif t == "CALL_RESPONSE_REPLY":
@@ -1199,7 +1501,6 @@ class PyTalkapp(MDApp):
             screen.status_text = "Appel terminé"
             Clock.schedule_once(lambda dt: self.go_back_to_main(), 2)
 
-        # --- LE GROS FIX EST ICI ---
         elif t == "IMAGE_DOWNLOAD_REPLY":
             if resp.get("success"):
                 filename = resp.get("filename")
@@ -1207,24 +1508,14 @@ class PyTalkapp(MDApp):
                 save_path = self.get_cache_path(filename)
                 
                 try:
-                    # 1. Ecriture sécurisée
                     with open(save_path, "wb") as f:
                         f.write(base64.b64decode(img_data))
-                    
-                    # 2. NETTOYAGE DU CACHE KIVY (CRUCIAL)
-                    # On force Kivy à oublier l'ancienne version de cette image
                     Cache.remove('kv.image', save_path)
                     Cache.remove('kv.texture', save_path)
-
-                    # 3. Mise à jour de l'interface
                     if filename in self.my_avatar_path:
                         self.my_avatar_path = save_path
-                    
                     if self.current_target:
-                        print(f"Image reçue et cache vidé pour {filename}. Refresh...")
-                        # Un petit délai pour être sûr que le fichier est clos
                         Clock.schedule_once(lambda dt: self.load_conversation(self.current_target), 0.5)
-                    
                 except Exception as e:
                     print(f"Erreur sauvegarde image: {e}")
 
@@ -1267,20 +1558,17 @@ class PyTalkapp(MDApp):
             data = resp.get("data", {})
             if data.get("username") == self.username:
                 screen = self.sm.get_screen('profile')
-                screen.ids.profile_infos.text = data.get("infos", "")
-                screen.ids.profile_phone.text = data.get("phone_number", "")
+                infos_val = data.get("infos")
+                phone_val = data.get("phone_number")
+                email_val = data.get("email") 
+                screen.ids.profile_infos.text = str(infos_val) if infos_val else ""
+                screen.ids.profile_phone.text = str(phone_val) if phone_val else ""
+                screen.ids.profile_email.text = str(email_val) if email_val else ""
                 server_filename = data.get("profile_pic_path", "")
                 if server_filename and server_filename != "default_avatar":
                         self.my_avatar_path = self.download_image_if_needed(server_filename, is_avatar=True)
                 else:
                         self.my_avatar_path = self.default_avatar_path
-            elif data.get("username") == self.current_target:
-                 server_filename = data.get("profile_pic_path", "")
-                 header_avatar = self.sm.get_screen('chat_interface').ids.chat_target_avatar
-                 if server_filename and server_filename != "default_avatar":
-                     header_avatar.source = self.download_image_if_needed(server_filename, is_avatar=True)
-                 else:
-                     header_avatar.source = self.default_avatar_path
             else:
                  self.show_target_info_dialog(data)
 
@@ -1294,12 +1582,16 @@ class PyTalkapp(MDApp):
             m_type = resp.get("msg_type", "text")
             f_path = resp.get("file_path")
             
+            # Récupération du contenu de la réponse si présent
+            reply_txt = resp.get("reply_content", "")
+            
             full_path = ""
             if f_path:
                 full_path = self.download_image_if_needed(f_path, is_avatar=False)
 
             if sender == self.current_target or (resp.get("is_group") and resp.get("group_name") == self.current_target):
-                self.add_message_bubble(sender, content, False, m_type, full_path)
+                # On passe reply_content ici
+                self.add_message_bubble(sender, content, False, m_type, full_path, reply_content=reply_txt)
             else:
                 target = resp.get("group_name") if resp.get("is_group") else sender
                 found = False
@@ -1314,20 +1606,15 @@ class PyTalkapp(MDApp):
                 self.refresh_sidebar()
                 toast(f"Message de {sender}")
                 
-        # --- AJOUTE CE BLOC DANS handle_response ---
         elif t == "NEW_GROUP_NOTIFICATION":
             grp_name = resp.get("name")
             creator = resp.get("creator")
-            
-            # Vérifier si on a déjà ce groupe dans la liste pour éviter les doublons
             found = False
             for c in self.conversations_data:
                 if c['username'] == grp_name:
                     found = True
                     break
-            
             if not found:
-                # On ajoute le groupe en haut de la liste
                 self.conversations_data.insert(0, {
                     'username': grp_name, 
                     'last_msg': f"Groupe créé par {creator}", 
@@ -1345,8 +1632,34 @@ class PyTalkapp(MDApp):
                     full_path = ""
                     if msg.get("file_path"):
                         full_path = self.download_image_if_needed(msg.get("file_path"), is_avatar=False)
-                        
-                    self.add_message_bubble(msg["sender"], msg["content"], msg["sender"] == self.username, msg.get("type", "text"), full_path)
+                    
+                    self.add_message_bubble(
+                        sender=msg["sender"], 
+                        message=msg["content"], 
+                        is_me=(msg["sender"] == self.username), 
+                        msg_type=msg.get("msg_type", "text"), 
+                        file_path=full_path,
+                        msg_id=msg.get("id", 0),
+                        likes=msg.get("likes", 0),
+                        dislikes=msg.get("dislikes", 0),
+                        reply_content=msg.get("reply_content", ""), 
+                        poll_options=msg.get("poll_options", [])
+                    )
+
+        elif t == "MESSAGE_REACTION_UPDATE":
+            msg_id = resp.get("message_id")
+            reaction = resp.get("reaction")
+            action = resp.get("action", "add")
+            
+            chat_box = self.sm.get_screen('chat_interface').ids.chat_box
+            for bubble in chat_box.children:
+                if bubble.message_id == msg_id:
+                    val = 1 if action == "add" else -1
+                    if reaction == "like":
+                        bubble.likes += val
+                    elif reaction == "dislike":
+                        bubble.dislikes += val
+                    break
 
         elif t == "TARGET_INFO_REPLY":
             pass
@@ -1378,25 +1691,18 @@ class PyTalkapp(MDApp):
     def receive_loop(self):
         buffer = ""
         decoder = json.JSONDecoder()
-        
         while self.is_connected:
             try:
-                # On lit par paquets
                 chunk = self.sock.recv(8192).decode('utf-8')
                 if not chunk: break
-                
                 buffer += chunk
-                
-                # On décode tout ce qu'on peut
                 while buffer:
                     try:
                         obj, index = decoder.raw_decode(buffer)
                         Clock.schedule_once(lambda dt: self.handle_response(obj))
                         buffer = buffer[index:].lstrip()
                     except json.JSONDecodeError:
-                        # Message incomplet, on attend la suite
                         break
-                        
             except Exception as e:
                 print(f"Erreur connexion: {e}")
                 break
@@ -1444,10 +1750,26 @@ class PyTalkapp(MDApp):
         screen = self.sm.get_screen('chat_interface')
         txt_field = screen.ids.msg_input
         msg = txt_field.text.strip()
+        
         if msg and self.current_target:
-            self.add_message_bubble(self.username, msg, True, "text")
-            self.send_json({"type": "MESSAGE", "receiver": self.current_target, "content": msg, "msg_type": "text"})
+            # Capture du texte de la réponse AVANT de reset
+            reply_txt = self.current_reply_text if self.current_reply_id else ""
+            
+            self.send_json({
+                "type": "MESSAGE", 
+                "receiver": self.current_target, 
+                "content": msg, 
+                "msg_type": "text",
+                "reply_to_id": self.current_reply_id,
+                "reply_content": reply_txt 
+            })
+            
+            # Affichage local
+            self.add_message_bubble(self.username, msg, True, "text", reply_content=reply_txt)
+            
             txt_field.text = ""
+            self.cancel_reply() # Réinitialise l'UI et les variables
+            
             found = False
             for c in self.conversations_data:
                 if c['username'] == self.current_target:
@@ -1464,9 +1786,30 @@ class PyTalkapp(MDApp):
         self.add_message_bubble(self.username, content, True, m_type)
         self.send_json({"type": "MESSAGE", "receiver": target, "content": content, "msg_type": m_type})
 
-    def add_message_bubble(self, sender, message, is_me, msg_type="text", file_path=""):
+    def add_message_bubble(self, sender, message, is_me, msg_type="text", file_path="", msg_id=0, likes=0, dislikes=0, reply_content="", poll_options=[]):
         chat_box = self.sm.get_screen('chat_interface').ids.chat_box
-        bubble = ChatBubble(sender=sender, message=message, is_me=is_me, msg_type=msg_type, file_path=file_path)
+        
+        bubble = ChatBubble(
+            sender=sender, 
+            message=message, 
+            is_me=is_me, 
+            msg_type=msg_type, 
+            file_path=file_path,
+            message_id=msg_id,       
+            likes=likes,             
+            dislikes=dislikes,       
+            reply_content=reply_content 
+        )
+
+        if msg_type == 'poll' and poll_options:
+            for opt in poll_options:
+                btn = MDFillRoundFlatButton(
+                    text=opt,
+                    size_hint_x=1,
+                    md_bg_color=get_color_from_hex("#6366F1")
+                )
+                bubble.ids.poll_box.add_widget(btn)
+
         chat_box.add_widget(bubble)
         scroll_view = self.sm.get_screen('chat_interface').ids.chat_scroll
         Clock.schedule_once(lambda dt: setattr(scroll_view, 'scroll_y', 0), 0.1)
@@ -1479,14 +1822,33 @@ class PyTalkapp(MDApp):
     
     def register_action(self):
         screen = self.sm.get_screen('register')
+        nom = screen.ids.reg_lastname.text.strip()
+        prenom = screen.ids.reg_firstname.text.strip()
+        email = screen.ids.reg_email.text.strip()
+        phone = screen.ids.reg_phone.text.strip()
         user_text = screen.ids.reg_user.text.strip()
         pass_text = screen.ids.reg_password.text.strip()
-        if not user_text or not pass_text:
-            screen.ids.reg_error_label.text = "Veuillez remplir tous les champs !"
-            toast("Champs vides")
+
+        if not all([nom, prenom, email, phone, user_text, pass_text]):
+            screen.ids.reg_error_label.text = "Remplissez tous les champs !"
             return
+        if "@" not in email:
+            screen.ids.reg_error_label.text = "Email invalide (manque '@')"
+            return
+        if len(phone) != 10 or not phone.isdigit():
+             screen.ids.reg_error_label.text = "Le numéro doit faire 10 chiffres !"
+             return
+
         if self.connect_socket():
-            self.send_json({"type": "REGISTER", "username": user_text, "password": pass_text})
+            self.send_json({
+                "type": "REGISTER", 
+                "username": user_text, 
+                "password": pass_text,
+                "first_name": prenom,
+                "last_name": nom,
+                "email": email,
+                "phone": phone
+            })
         else:
             screen.ids.reg_error_label.text = "Serveur inaccessible"
             toast("Erreur serveur")
@@ -1499,17 +1861,22 @@ class PyTalkapp(MDApp):
         screen = self.sm.get_screen('profile')
         infos = screen.ids.profile_infos.text
         phone = screen.ids.profile_phone.text.strip()
-        
+        email = screen.ids.profile_email.text.strip() 
+
         if phone:
             if not phone.isdigit() or len(phone) != 10:
                 toast("Erreur : Le numéro doit faire 10 chiffres !")
                 return
+        if email:
+            if "@" not in email:
+                toast("Erreur : Email invalide (manque '@')")
+                return
 
-        # On envoie juste la demande, on attend la réponse pour le Toast
         self.send_json({
             "type": "UPDATE_PROFILE", 
             "infos": infos, 
-            "phone": phone
+            "phone": phone,
+            "email": email 
         })
     
     def open_file_picker(self):
@@ -1563,3 +1930,4 @@ class PyTalkapp(MDApp):
 
 if __name__ == "__main__":
     PyTalkapp().run()
+
